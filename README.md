@@ -3,6 +3,8 @@
 3D business sim for the browser (CrazyGames). Start with one hot dog cart, grow a street-food empire.
 Offline and single-player. three.js + TypeScript + Vite.
 
+**Play:** https://antonk47design.github.io/street-tycoon/ (deployed by `.github/workflows/pages.yml` on every push; CI in `ci.yml`).
+
 ```
 npm install
 npm run dev          # http://localhost:5173 (debug overlay: F2)
