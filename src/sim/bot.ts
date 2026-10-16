@@ -2,6 +2,8 @@ import { BALANCE } from '../data/balance';
 import { UPGRADES, UPGRADE_ORDER, upgradeCost, type UpgradeId } from '../data/upgrades';
 import { Rng } from '../core/rng';
 import { batchSize, fairPrice, roundPrice } from './cart';
+import type { AutoStage } from '../data/workers';
+import { trainingInfo } from './workers';
 import { DT, type Sim } from './sim';
 import type { Quality } from './state';
 
@@ -71,7 +73,7 @@ export class Bot {
     let bestScore = -Infinity;
     st.carts.forEach((c, ci) => {
       const rt = sim.runtime[ci];
-      if (!rt || sim.canCook(ci) !== 'ok') return;
+      if (!rt || sim.canCook(ci) !== 'ok' || sim.workerOf(ci)) return;
       const need = rt.queue.length - c.stock;
       if (c.stock > 1 && need <= 0) return;
       const score = need * 2 - c.stock;
@@ -90,11 +92,12 @@ export class Bot {
     for (let ci = 0; ci < st.carts.length; ci++) {
       const c = st.carts[ci];
       if (!c) continue;
-      if (c.supplies < batchSize(c) && sim.restockPrice(ci) > 0 && st.cash >= 3) {
+      const w = sim.workerOf(ci);
+      if (c.supplies < batchSize(c) * (w ? 2 : 1) && (!w || w.auto < 2) && sim.restockPrice(ci) > 0 && st.cash >= 3) {
         sim.restock(ci);
         return;
       }
-      if (c.clean < 60 && sim.clean(ci)) return;
+      if (c.clean < 60 && (!w || w.auto < 4) && sim.clean(ci)) return;
     }
     // 3) goals & purchases
     const q = sim.currentQuest();
@@ -106,11 +109,26 @@ export class Bot {
     const cartCost = sim.nextCartCost();
     const savingForCart = q?.focus === 'newCart' && cartCost !== null;
     if (savingForCart && st.cash >= (cartCost as number)) {
-      const spot = sim.freeSpots().sort((a, b) => b.traffic - a.traffic - (sim.competitorsNear(b, 'hotdog') - sim.competitorsNear(a, 'hotdog')) * 0.3)[0];
-      if (spot) sim.buyCart(spot.id);
+      this.buyCart();
       return;
     }
-    const reserve = savingForCart ? (cartCost as number) : 0;
+    // hire: cheapest candidate onto the best unstaffed cart
+    const free = st.carts.map((_, ci) => ci).filter((ci) => !sim.workerOf(ci));
+    const cand = sim.candidates()[0];
+    const wantHire = q?.focus === 'hire' || (st.quest > 10 && free.length > 0);
+    if (wantHire && cand && free.length && st.cash >= cand.cost) {
+      sim.hire(0, free[0] as number);
+      return;
+    }
+    // training: the next stage for the first idle worker
+    const trainee = st.workers.find((w) => !w.training && w.auto < 5);
+    const tInfo = trainee ? trainingInfo((trainee.auto + 1) as AutoStage) : null;
+    const wantTrain = q?.focus === 'train' || (st.quest > 10 && tInfo !== null && st.cash > tInfo.cost * 2);
+    if (wantTrain && trainee && tInfo && st.cash >= tInfo.cost) {
+      sim.startTraining(trainee.id);
+      return;
+    }
+    const reserve = savingForCart ? (cartCost as number) : q?.focus === 'hire' && cand ? cand.cost : q?.focus === 'train' && tInfo ? tInfo.cost : 0;
     for (const id of this.profile.priority) {
       for (let ci = 0; ci < st.carts.length; ci++) {
         const c = st.carts[ci];
@@ -123,10 +141,17 @@ export class Bot {
       }
     }
     // later carts once the chain asks for them or money piles up
-    if (cartCost !== null && st.cash > cartCost * 1.5) {
-      const spot = sim.freeSpots()[0];
-      if (spot) sim.buyCart(spot.id);
-    }
+    if (cartCost !== null && st.cash > cartCost * 1.5) this.buyCart();
+  }
+
+  /** New cart: newest unlocked kitchen we don't run yet, on the busiest spot without a same-kitchen rival. */
+  private buyCart(): void {
+    const sim = this.sim;
+    const owned = new Set(sim.state.carts.map((c) => c.kitchen));
+    const unlocked = sim.unlockedKitchens();
+    const kitchen = [...unlocked].reverse().find((k) => !owned.has(k)) ?? 'hotdog';
+    const spot = sim.freeSpots().sort((a, b) => b.traffic - a.traffic - (sim.competitorsNear(b, kitchen) - sim.competitorsNear(a, kitchen)) * 0.3)[0];
+    if (spot) sim.buyCart(spot.id, kitchen);
   }
 }
 

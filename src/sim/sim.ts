@@ -1,5 +1,6 @@
 import { BALANCE } from '../data/balance';
-import { KITCHENS } from '../data/kitchens';
+import { KITCHENS, KITCHEN_ORDER, type KitchenId } from '../data/kitchens';
+import { WORKERS, type AutoStage } from '../data/workers';
 import type { MilestoneId } from '../data/pacing';
 import { QUESTS, SIDE_GOALS, type QuestDef, type StatKey } from '../data/quests';
 import { UPGRADES, UPGRADE_ORDER, upgradeCost, type UpgradeId } from '../data/upgrades';
@@ -8,7 +9,8 @@ import { Rng } from '../core/rng';
 import { generateCity, type CartSpot, type CityLayout, type PathNode } from './city';
 import { appeal, batchSize, fairPrice, ingredientCost, patienceSec, priceMax, priceMin, priceMult, reach, restockCost, roundPrice, serveSec, stockCap, suppliesCap, type AppealParts } from './cart';
 import { Mood, PedState, makePed, type Ped } from './peds';
-import { newCart, newGameState, type CartState, type GameState, type Quality } from './state';
+import { newCart, newGameState, type CartState, type GameState, type Quality, type WorkerState } from './state';
+import { addXp, candidates, trainingInfo, workerCookSec, workerQuality, workerWage, type Candidate } from './workers';
 
 export const DT = 1 / BALANCE.SIM_HZ;
 const CU = BALANCE.customers;
@@ -16,7 +18,11 @@ const PD = BALANCE.peds;
 
 export type SimEvent =
   | { type: 'sale'; cart: number; amount: number; tip: number }
-  | { type: 'cooked'; cart: number; portions: number; quality: Quality }
+  | { type: 'cooked'; cart: number; portions: number; quality: Quality; byWorker: boolean }
+  | { type: 'hired'; cart: number; worker: number }
+  | { type: 'trainingStarted'; worker: number; stage: AutoStage }
+  | { type: 'trained'; worker: number; stage: AutoStage }
+  | { type: 'workerLevel'; worker: number; level: number }
   | { type: 'angry'; cart: number }
   | { type: 'upgrade'; cart: number; id: UpgradeId; level: number }
   | { type: 'cartBought'; cart: number }
@@ -34,6 +40,13 @@ export interface CartRuntime {
   serveT: number;
   cleanT: number;
   cooking: boolean;
+  /** Who is cooking right now. */
+  cookBy: 'player' | 'worker' | null;
+  /** Worker timers: cooking countdown, reaction delay, price steering, idle time without customers. */
+  workerT: number;
+  reactT: number;
+  priceT: number;
+  idleT: number;
   /** Short animation timers for the view. */
   saleFlash: number;
   appeal: AppealParts;
@@ -86,7 +99,7 @@ export class Sim {
   }
 
   private makeRuntime(): CartRuntime {
-    return { queue: [], serveT: 0, cleanT: 0, cooking: false, saleFlash: 0, appeal: { clean: 1, location: 1, price: 1, taste: 1, stars: 3 }, stars: 3 };
+    return { queue: [], serveT: 0, cleanT: 0, cooking: false, cookBy: null, workerT: 0, reactT: 0, priceT: 0, idleT: 0, saleFlash: 0, appeal: { clean: 1, location: 1, price: 1, taste: 1, stars: 3 }, stars: 3 };
   }
 
   setPopulation(n: number): void {
@@ -181,9 +194,13 @@ export class Sim {
     return 'ok';
   }
 
-  startCook(ci: number): CookResult {
+  startCook(ci: number, by: 'player' | 'worker' = 'player'): CookResult {
     const r = this.canCook(ci);
-    if (r === 'ok') (this.runtime[ci] as CartRuntime).cooking = true;
+    if (r === 'ok') {
+      const rt = this.runtime[ci] as CartRuntime;
+      rt.cooking = true;
+      rt.cookBy = by;
+    }
     return r;
   }
 
@@ -191,7 +208,9 @@ export class Sim {
     const c = this.state.carts[ci];
     const rt = this.runtime[ci];
     if (!c || !rt) return 0;
+    const byWorker = rt.cookBy === 'worker';
     rt.cooking = false;
+    rt.cookBy = null;
     const want = batchSize(c) + (quality === 2 ? BALANCE.minigame.perfectBonus : 0);
     const portions = Math.max(0, Math.min(want, Math.floor(c.supplies), stockCap(c) + (quality === 2 ? BALANCE.minigame.perfectBonus : 0) - c.stock));
     if (portions <= 0) return 0;
@@ -200,13 +219,16 @@ export class Sim {
     c.quality = quality;
     this.bump('cooks');
     if (quality === 2) this.bump('perfects');
-    this.events.emit({ type: 'cooked', cart: ci, portions, quality });
+    this.events.emit({ type: 'cooked', cart: ci, portions, quality, byWorker });
     return portions;
   }
 
   cancelCook(ci: number): void {
     const rt = this.runtime[ci];
-    if (rt) rt.cooking = false;
+    if (rt) {
+      rt.cooking = false;
+      rt.cookBy = null;
+    }
   }
 
   setPrice(ci: number, price: number): void {
@@ -265,21 +287,139 @@ export class Sim {
     return true;
   }
 
-  buyCart(spotId: string): number {
+  /** Kitchens the player may open now (by customers served). */
+  unlockedKitchens(): KitchenId[] {
+    return KITCHEN_ORDER.filter((k) => {
+      const u = KITCHENS[k].unlockServed;
+      return u !== null && this.state.stats.served >= u;
+    });
+  }
+
+  buyCart(spotId: string, kitchen: KitchenId = 'hotdog'): number {
     const cost = this.nextCartCost();
     const spot = this.spotById.get(spotId);
     if (cost === null || !spot || this.state.cash < cost) return -1;
     if (this.state.carts.some((c) => c.spot === spotId)) return -1;
+    if (!this.unlockedKitchens().includes(kitchen)) return -1;
     this.state.cash -= cost;
-    const kitchen = 'hotdog';
     const c = newCart(this.state.nextCartId++, spotId, kitchen, roundPrice(KITCHENS[kitchen].fairPrice));
     this.state.carts.push(c);
     this.runtime.push(this.makeRuntime());
     this.state.stats.carts = this.state.carts.length;
+    this.state.stats.kitchens = new Set(this.state.carts.map((x) => x.kitchen)).size;
     if (this.state.carts.length === 2) this.milestone('secondCart');
     const ci = this.state.carts.length - 1;
     this.events.emit({ type: 'cartBought', cart: ci });
     return ci;
+  }
+
+  // ---------------------------------------------------------------- workers
+
+  /** Worker running cart index ci, if any. */
+  workerOf(ci: number): WorkerState | undefined {
+    const c = this.state.carts[ci];
+    if (!c) return undefined;
+    return this.state.workers.find((w) => w.cart === c.id);
+  }
+
+  workerById(id: number): WorkerState | undefined {
+    return this.state.workers.find((w) => w.id === id);
+  }
+
+  cartIndexOfWorker(w: WorkerState): number {
+    return this.state.carts.findIndex((c) => c.id === w.cart);
+  }
+
+  candidates(): Candidate[] {
+    return candidates(this.state.seed, this.state.hires);
+  }
+
+  /** Hires candidate k for cart ci. Returns the worker id, or -1. */
+  hire(k: number, ci: number): number {
+    const cand = this.candidates()[k];
+    const c = this.state.carts[ci];
+    if (!cand || !c || this.workerOf(ci) || this.state.cash < cand.cost) return -1;
+    this.state.cash -= cand.cost;
+    const w: WorkerState = { id: this.state.nextWorkerId++, name: cand.name, stars: cand.stars, level: 1, xp: 0, cart: c.id, auto: 1, training: null };
+    this.state.workers.push(w);
+    this.state.hires++;
+    this.state.stats.workers = this.state.workers.length;
+    const rt = this.runtime[ci] as CartRuntime;
+    rt.reactT = WORKERS.reactSec;
+    this.milestone('firstWorker');
+    this.events.emit({ type: 'hired', cart: ci, worker: w.id });
+    return w.id;
+  }
+
+  /** Starts training the next automation stage (runs on world time, also while offline). */
+  startTraining(workerId: number): boolean {
+    const w = this.workerById(workerId);
+    if (!w || w.training || w.auto >= 5) return false;
+    const stage = (w.auto + 1) as AutoStage;
+    const info = trainingInfo(stage);
+    if (!info || this.state.cash < info.cost) return false;
+    this.state.cash -= info.cost;
+    w.training = { stage, endsAt: this.state.worldTime + info.sec };
+    this.bump('trainings');
+    if (info.sec >= WORKERS.longTrainingSec) {
+      this.bump('longTrainings');
+      this.milestone('tomorrowPayoff');
+    }
+    this.events.emit({ type: 'trainingStarted', worker: w.id, stage });
+    return true;
+  }
+
+  /** Completes trainings whose time has come (also called after offline time is credited). */
+  tickTraining(): void {
+    for (const w of this.state.workers) {
+      if (!w.training || this.state.worldTime < w.training.endsAt) continue;
+      w.auto = w.training.stage;
+      w.training = null;
+      this.milestone('firstAutomation');
+      this.events.emit({ type: 'trained', worker: w.id, stage: w.auto });
+    }
+  }
+
+  private tickWorker(ci: number, w: WorkerState): void {
+    const c = this.state.carts[ci] as CartState;
+    const rt = this.runtime[ci] as CartRuntime;
+    // stage 1: cook
+    if (rt.cookBy === 'worker') {
+      rt.workerT -= DT;
+      if (rt.workerT <= 0) {
+        const q = workerQuality(w, this.rng.next());
+        const n = this.finishCook(ci, q);
+        if (n > 0) {
+          // wage only while producing; never more than the cash we have
+          this.state.cash -= Math.min(this.state.cash, n * workerWage(w));
+          this.bump('workerCooks');
+          if (addXp(w, n * WORKERS.xpPerPortion)) this.events.emit({ type: 'workerLevel', worker: w.id, level: w.level });
+        }
+        rt.reactT = WORKERS.reactSec;
+      }
+    } else if (!rt.cooking) {
+      const need = c.stock <= Math.max(WORKERS.cookBelow, rt.queue.length - 1);
+      if (need && this.canCook(ci) === 'ok') {
+        rt.reactT -= DT;
+        if (rt.reactT <= 0 && this.startCook(ci, 'worker') === 'ok') rt.workerT = workerCookSec(w);
+      }
+    }
+    // stage 2: restock
+    if (w.auto >= 2 && c.supplies < batchSize(c) * WORKERS.restockBelowBatches && this.state.cash >= ingredientCost(c) * batchSize(c)) this.restock(ci);
+    // stage 3: steer the price by queue length
+    if (w.auto >= 3) {
+      const ap = WORKERS.autoPrice;
+      rt.idleT = rt.queue.length === 0 ? rt.idleT + DT : 0;
+      rt.priceT += DT;
+      if (rt.priceT >= ap.stepEverySec) {
+        rt.priceT = 0;
+        const fair = fairPrice(c);
+        if (rt.queue.length >= ap.upQueue && c.price < fair * ap.maxFactor) this.setPrice(ci, c.price + BALANCE.cart.priceStep);
+        else if (rt.idleT >= ap.downIdleSec && c.price > fair * ap.minFactor) this.setPrice(ci, c.price - BALANCE.cart.priceStep);
+      }
+    }
+    // stage 4: clean
+    if (w.auto >= 4 && c.clean < WORKERS.cleanBelow) this.clean(ci);
   }
 
   // ---------------------------------------------------------------- tick
@@ -287,10 +427,16 @@ export class Sim {
   step(): void {
     const st = this.state;
     st.time += DT;
+    st.worldTime += DT;
     this.sessionTime += DT;
     this.advanceClock();
 
-    for (let ci = 0; ci < st.carts.length; ci++) this.tickCart(ci);
+    this.tickTraining();
+    for (let ci = 0; ci < st.carts.length; ci++) {
+      this.tickCart(ci);
+      const w = this.workerOf(ci);
+      if (w) this.tickWorker(ci, w);
+    }
     this.tickPeds();
     this.spawn();
     this.tickIncome();
@@ -333,7 +479,8 @@ export class Sim {
       const p = this.peds[front] as Ped;
       if (p.state === PedState.Queue && p.slot === 0 && c.stock > 0) {
         rt.serveT += DT;
-        if (rt.serveT >= serveSec(c)) {
+        const w = this.workerOf(ci);
+        if (rt.serveT >= serveSec(c) * (w && w.auto >= 5 ? WORKERS.fastMul : 1)) {
           rt.serveT = 0;
           this.sell(ci, p);
         }
@@ -593,20 +740,22 @@ export class Sim {
   }
 
   /** Expected customers per second for a cart right now (demand model). */
-  arrivalRate(ci: number): number {
+  arrivalRate(ci: number, hunger = this.hunger(), queue = -1): number {
     const c = this.state.carts[ci] as CartState;
     const rt = this.runtime[ci] as CartRuntime;
     const s = this.spotOf(c);
-    if (rt.queue.length >= CU.maxQueue) return 0;
+    const q = queue >= 0 ? queue : rt.queue.length;
+    if (q >= CU.maxQueue) return 0;
+    const stars = queue >= 0 ? appeal(c, s).stars : rt.stars;
     const comp = this.competitorsNear(s, c.kitchen, ci);
     return (
       CU.baseRate *
       s.traffic *
       (1 + CU.signRate * c.up.sign) *
-      (CU.appealBase + CU.appealSlope * rt.stars) *
+      (CU.appealBase + CU.appealSlope * stars) *
       priceMult(c) *
-      this.hunger() *
-      Math.pow(CU.queuePenalty, rt.queue.length) *
+      hunger *
+      Math.pow(CU.queuePenalty, q) *
       Math.pow(CU.competitionMult, comp)
     );
   }

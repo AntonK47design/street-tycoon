@@ -1,4 +1,5 @@
 import { t } from '../core/i18n';
+import { QUESTS } from '../data/quests';
 import { batchSize } from '../sim/cart';
 import type { ScreenPoint } from '../render/view';
 import type { CartPanel } from './cart-panel';
@@ -6,6 +7,8 @@ import type { UiContext } from './context';
 import { h, onTap, setText, toggle } from './dom';
 import type { Hud } from './hud';
 import type { Labels } from './labels';
+
+const TUTORIAL_END = QUESTS.findIndex((q) => q.id === 'q_kitchen');
 
 type Target = { el: HTMLElement } | { world: [number, number, number] } | null;
 
@@ -78,7 +81,7 @@ export class Tutorial {
     const st = sim.state;
     if (!this.active) return null;
     const q = sim.currentQuest();
-    if (!q || st.quest >= 5) {
+    if (!q || st.quest >= TUTORIAL_END) {
       this.flags.tutorialDone = true;
       return null;
     }
@@ -108,6 +111,23 @@ export class Tutorial {
         if (this.placing) return { id: 'place', text: t('tut.place'), target: null };
         if (st.cash < cost) return c0.stock === 0 && sim.canCook(0) === 'ok' ? { id: 'more', text: t('tut.cookMore'), target: this.cartTarget(0) } : null;
         return { id: 'cart', text: t('tut.newCart'), target: { el: this.hud.newCart } };
+      }
+      case 'q_hire': {
+        const cand = sim.candidates()[0];
+        if (!cand || st.cash < cand.cost) return null;
+        if (!this.panel.isOpen) return { id: 'hire1', text: t('tut.hireOpen'), target: this.cartTarget(0) };
+        if (this.panel.currentTab !== 'overview') return { id: 'hire2', text: t('tut.priceTab'), target: { el: this.panel.overviewTab } };
+        return { id: 'hire3', text: t('tut.hire'), target: { el: this.panel.staff.hireBtn } };
+      }
+      case 'q_workerCooks':
+        return { id: 'worker', text: t('tut.workerWorks'), target: null };
+      case 'q_train': {
+        const w = st.workers[0];
+        if (!w || w.training || st.cash < 150) return w?.training ? { id: 'training', text: t('tut.training'), target: null } : null;
+        const ci = sim.cartIndexOfWorker(w);
+        if (this.panel.cartIndex !== ci) return { id: 'train1', text: t('tut.trainOpen'), target: this.cartTarget(Math.max(0, ci)) };
+        if (this.panel.currentTab !== 'overview') return { id: 'train2', text: t('tut.priceTab'), target: { el: this.panel.overviewTab } };
+        return { id: 'train3', text: t('tut.train'), target: { el: this.panel.staff.trainBtn } };
       }
       default:
         return null;
@@ -151,7 +171,7 @@ export class Tutorial {
     toggle(this.arrow, 'hidden', !ok);
     if (ok) {
       const bob = Math.sin(this.time * 6) * 6;
-      this.arrow.style.transform = `translate3d(${x.toFixed(1)}px, ${(y - 6 + bob).toFixed(1)}px, 0) translate(-50%, -100%)`;
+      this.arrow.style.transform = `translate3d(${Math.round(x)}px, ${Math.round(y - 6 + bob)}px, 0) translate(-50%, -100%)`;
     }
   }
 }

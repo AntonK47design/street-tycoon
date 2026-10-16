@@ -11,6 +11,8 @@ import { createPlatform, type Platform } from './platform/platform';
 import { detectTier, lowerTier, resolveTier, TIERS, type Tier } from './render/quality';
 import { GameView } from './render/view';
 import { Sim } from './sim/sim';
+import { applyOffline, canClaimDailyReward, dailyUnlocked, refreshDaily } from './sim/retention';
+import { RETENTION } from './data/workers';
 import { AppUi } from './ui/app-ui';
 import type { UiContext } from './ui/context';
 
@@ -63,6 +65,10 @@ async function boot(): Promise<void> {
   let tier = resolveTier(blob.settings.quality, autoTier);
 
   const sim = new Sim(blob.game, TIERS[tier].population);
+  // offline earnings + trainings for the time since the last save (clock changes backwards are ignored)
+  const awaySec = fresh ? 0 : Math.max(0, (Date.now() - blob.savedAt) / 1000);
+  const offline = applyOffline(sim, awaySec);
+  refreshDaily(sim.state, today());
   const root = document.getElementById('game') as HTMLElement;
   let view: GameView;
   try {
@@ -83,6 +89,7 @@ async function boot(): Promise<void> {
 
   let loop: FixedLoop | null = null;
   let blocking = false;
+  let blockCount = 0;
   let playStart = performance.now();
   const save = (): void => {
     blob.game = sim.state;
@@ -103,13 +110,28 @@ async function boot(): Promise<void> {
     save,
     isMobile: mobile,
     setBlocking: (on) => {
-      blocking = on;
-      if (loop) loop.simPaused = on;
-      if (on) platform.gameplayStop();
+      blockCount = Math.max(0, blockCount + (on ? 1 : -1));
+      blocking = blockCount > 0;
+      if (loop) loop.simPaused = blocking;
+      if (blocking) platform.gameplayStop();
       else platform.gameplayStart();
     },
   };
-  const ui = new AppUi(ctx, blob.settings, () => t(`set.${view.currentTier}`));
+  const ui = new AppUi(ctx, blob.settings, () => t(`set.${view.currentTier}`), () => today());
+  /** Returning player: show what happened while away, then the daily reward. */
+  const welcome = (r: typeof offline): void => {
+    const showDaily = (): void => {
+      if (sim.state.quest >= 4 && (canClaimDailyReward(sim.state, today()) || dailyUnlocked(sim.state))) ui.dailyModal.open();
+    };
+    if (r.seconds >= RETENTION.offlineMinSec && (r.earned > 0 || r.trained > 0 || sim.state.workers.length > 0)) {
+      ui.offlineModal.onClose = () => {
+        ui.offlineModal.onClose = () => {};
+        if (newDay) showDaily();
+      };
+      ui.offlineModal.open(r);
+    } else if (newDay) showDaily();
+  };
+  let newDay = returning;
   ui.settingsPanel.onChange = (s) => {
     sfx.setEnabled(s.sound);
     const nt = resolveTier(s.quality, autoTier);
@@ -144,6 +166,7 @@ async function boot(): Promise<void> {
   loop = new FixedLoop(1 / BALANCE.SIM_HZ, {
     update: () => sim.step(),
     render: (alpha, dt) => {
+      view.prepare(dt);
       ui.update(dt);
       view.render(alpha, dt);
       if (!started) {
@@ -155,6 +178,7 @@ async function boot(): Promise<void> {
         platform.record(`interactive after ${t0}s`);
         document.getElementById('boot')?.remove();
         if (returning) ui.toasts.show(t('toast.welcomeBack'), 'good', 3200);
+        welcome(offline);
       }
       fpsAcc += dt;
       fpsFrames++;
@@ -180,17 +204,26 @@ async function boot(): Promise<void> {
   loop.start();
 
   // autosave + lifecycle
+  let hiddenAt = Date.now();
   setInterval(() => {
     if (!document.hidden) save();
   }, BALANCE.save.autosaveSec * 1000);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
+      hiddenAt = Date.now();
       ui.onHidden();
       save();
       loop?.stop();
       sfx.suspend(true);
       platform.gameplayStop();
     } else {
+      // long absence with the tab hidden: credit it like a return visit
+      const away = (Date.now() - hiddenAt) / 1000;
+      if (away >= RETENTION.offlineMinSec) {
+        const r = applyOffline(sim, away);
+        newDay = refreshDaily(sim.state, today());
+        welcome(r);
+      }
       loop?.start();
       sfx.suspend(false);
       if (!blocking) platform.gameplayStart();

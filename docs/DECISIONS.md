@@ -9,3 +9,8 @@
 - **Minigame does not pause the game.** Customers keep coming, which keeps it tense and short. Blocking UI (Settings) pauses the sim and reports `gameplayStop`.
 - **Low tier**: no shadows, no backdrop ring, fewer people and cars, DPR 1, 30 FPS cap if it still struggles.
 - **Anti soft-lock**: if a cart has no stock, no supplies and you cannot afford one portion, a free crate arrives.
+- **One cook per cart** (Phase 2 only has the cart role). Hiring uses a deterministic candidate list (seed + hire count), so reloading can't reroll candidates.
+- **Training runs on "world time"** (play time + credited absence). Long trainings (40 min+) are the Phase 2 "pays off tomorrow" hook. Production chains with waiting times come in Phase 4.
+- **Offline is analytic**: min(demand, cook capacity, serve capacity) × 60 % × time, capped at 8 h. Without stage-2 training, supplies run out. Carts without a cook only sell their stock. This rewards hiring and training, the systems that make the game play itself.
+- **Daily reward/tasks use the local calendar date** (the sim stays pure: the app passes `YYYY-MM-DD`). Missing a day resets the streak. The daily button only appears after the second cart, so the first minutes stay focused.
+- **Pages deploy** from every push of the default branch; the CrazyGames SDK falls back to the mock (localStorage) there.

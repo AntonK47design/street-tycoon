@@ -219,6 +219,9 @@ export class GameView {
           this.fx.sparkle(c.spot.x, TOP + 0.3, c.spot.z, 26);
         }
         break;
+      case 'hired':
+        if (c) this.fx.sparkle(c.vendor.x, TOP + 0.5, c.vendor.z, 30);
+        break;
       case 'cartBought':
         this.addCart(e.cart);
         {
@@ -341,9 +344,14 @@ export class GameView {
     }
   }
 
+  /** Moves the camera for this frame. Call before UI labels are projected so they never lag a frame behind. */
+  prepare(dt: number): void {
+    this.camera.update(dt);
+    this.camera.cam.updateMatrixWorld();
+  }
+
   render(alpha: number, dt: number): void {
     this.time += dt;
-    this.camera.update(dt);
     this.updateLighting();
     this.updateCrowd(alpha, dt);
     this.updateCarts(dt);
@@ -400,18 +408,25 @@ export class GameView {
       cv.update(c, dt, this.time, rt.cooking);
       if (rt.cooking && Math.random() < dt * 5) this.fx.puff(cv.spot.x - cv.spot.fx * 0.05 + (cv.spot.fz ? 0.45 : 0), TOP + 1.45, cv.spot.z - cv.spot.fz * 0.05 - (cv.spot.fx ? 0.45 : 0));
       const working = rt.cooking || (rt.serveT > 0 && rt.queue.length > 0) ? 1 : 0;
-      lookFromSeed(c.id * 7919 + 13, look);
-      look.shirt = 0xf3efe6;
-      if (this.lookGen.length && (this.vendorLooked[ci] ?? false) === false) {
-        this.vendors.setLook(ci, look);
-        this.vendorLooked[ci] = true;
+      const w = this.sim.workerOf(ci);
+      const key = w ? w.id * 101 + 7 : -1;
+      if (this.vendorKey[ci] !== key) {
+        this.vendorKey[ci] = key;
+        if (w) {
+          lookFromSeed(w.id * 7919 + w.name.length * 13, look);
+          look.shirt = 0x2f7a6d;
+        } else {
+          lookFromSeed(1234567, look);
+          look.shirt = 0xf3efe6;
+        }
+        this.vendors.setLook(n, look);
       }
       this.vendors.set(n++, cv.vendor.x, TOP, cv.vendor.z, cv.vendor.heading, 1, this.time * (working ? 7 : 1.5), 0, 1, working);
     }
     this.vendors.commit(n);
   }
 
-  private readonly vendorLooked: boolean[] = [];
+  private readonly vendorKey: number[] = [];
 
   stats(): { calls: number; triangles: number; geometries: number; textures: number } {
     const i = this.renderer.info;

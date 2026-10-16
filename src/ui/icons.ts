@@ -27,6 +27,10 @@ export const ICON = {
   hotdog: svg(
     '<rect x="2.5" y="10" width="19" height="7.5" rx="3.75" fill="#e2b071"/><rect x="1.5" y="8.6" width="21" height="4.6" rx="2.3" fill="#c4553b"/><path d="M4.5 10.9c1.5-1.2 2.5 1.2 4 0s2.5 1.2 4 0 2.5 1.2 4 0 2.5 1.2 3 0" fill="none" stroke="#f2c93a" stroke-width="1.3" stroke-linecap="round"/><path d="M3 13.6h18" stroke="#c99257" stroke-width="1.2"/>',
   ),
+  burger: svg(
+    '<path d="M3 11a9 6.5 0 0 1 18 0z" fill="#e2a85e"/><rect x="2.5" y="11.5" width="19" height="2.4" rx="1.2" fill="#7fb24a"/><rect x="3" y="13.6" width="18" height="2" rx="1" fill="#f2c14e"/><rect x="2.5" y="15.2" width="19" height="2.8" rx="1.4" fill="#6b3d24"/><path d="M3 18.5h18a3 3 0 0 1-3 2.5H6a3 3 0 0 1-3-2.5z" fill="#e2a85e"/><circle cx="9" cy="7.6" r=".7" fill="#fff4dc"/><circle cx="13" cy="6.8" r=".7" fill="#fff4dc"/><circle cx="15.5" cy="8.6" r=".7" fill="#fff4dc"/>',
+  ),
+  crepe: svg('<path d="M2.5 16.5L12 4l9.5 12.5c-3 2.5-16 2.5-19 0z" fill="#f1d29a"/><path d="M7 15.2c2-1 3.5 0 5-1s3 0 5-1" stroke="#6b3d24" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M2.5 16.5c3 2.5 16 2.5 19 0" stroke="#d9ad6a" stroke-width="1.4" fill="none"/>'),
   lock: svg('<rect x="5" y="10.5" width="14" height="10" rx="2.4" fill="currentColor"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" fill="none" stroke="currentColor" stroke-width="2.4"/>'),
   speed: svg('<path d="M13 2L4.5 13.5H11L10 22l9-12.2h-6.6z" fill="currentColor"/>'),
   grill: svg('<rect x="3" y="8" width="18" height="5" rx="1.5" fill="currentColor"/><path d="M6 13l-2 7M18 13l2 7M12 13v7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 4.5c1 1 1 2 0 3M12 3.5c1 1 1 2.5 0 4M17 4.5c1 1 1 2 0 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>'),

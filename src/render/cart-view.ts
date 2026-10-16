@@ -42,6 +42,10 @@ function at(x: number, y: number, z: number, sx: number, sy: number, sz: number,
 }
 
 const sausageMat = new MeshLambertMaterial({ color: 0xb4513a });
+const PATTY = new CylinderGeometry(0.075, 0.075, 0.035, 10);
+const pattyMat = new MeshLambertMaterial({ color: 0x6b3d24 });
+const CREPE = new CylinderGeometry(0.11, 0.11, 0.015, 14);
+const crepeMat = new MeshLambertMaterial({ color: 0xf1d29a });
 const glowMat = new MeshBasicMaterial({ color: 0xffd98a });
 const neonMat = new MeshBasicMaterial({ color: 0xff8a5c });
 const litterGeo = new BoxGeometry(0.22, 0.02, 0.16);
@@ -95,9 +99,22 @@ function buildBody(c: CartState): BufferGeometry {
   const sy = 2.85 + up.sign * 0.02;
   g.add(BOX, at(0, sy, -0.15, 1.5 * signScale, 0.52 * signScale, 0.08), k.trim);
   g.add(BOX, at(0, sy, -0.1, 1.38 * signScale, 0.4 * signScale, 0.04), k.body);
-  g.add(BOX, at(0, sy - 0.04 * signScale, -0.07, 0.8 * signScale, 0.12 * signScale, 0.05), 0xe2b071);
-  g.add(CYL6, at(0, sy + 0.04 * signScale, -0.06, 0.06 * signScale, 0.9 * signScale, 0.06 * signScale, 0, Math.PI / 2), 0xc4553b);
-  g.add(BOX, at(0, sy + 0.1 * signScale, -0.04, 0.6 * signScale, 0.025, 0.02), 0xf0c93a);
+  const ss = signScale;
+  if (c.kitchen === 'burger') {
+    g.add(BOX, at(0, sy - 0.1 * ss, -0.07, 0.62 * ss, 0.08 * ss, 0.05), 0xd9a25c);
+    g.add(BOX, at(0, sy - 0.03 * ss, -0.06, 0.66 * ss, 0.07 * ss, 0.05), 0x6b3d24);
+    g.add(BOX, at(0, sy + 0.02 * ss, -0.05, 0.7 * ss, 0.035 * ss, 0.05), 0xf2c14e);
+    g.add(BOX, at(0, sy + 0.05 * ss, -0.05, 0.68 * ss, 0.03 * ss, 0.05), 0x7fb24a);
+    g.add(BOX, at(0, sy + 0.11 * ss, -0.07, 0.62 * ss, 0.1 * ss, 0.05), 0xe2a85e);
+  } else if (c.kitchen === 'crepe') {
+    g.add(CYL, at(0, sy, -0.06, 0.2 * ss, 0.05, 0.2 * ss, Math.PI / 2), 0xf1d29a);
+    g.add(BOX, at(0.02 * ss, sy + 0.02 * ss, -0.03, 0.26 * ss, 0.05 * ss, 0.03), 0x6b3d24);
+    g.add(BOX, at(-0.1 * ss, sy - 0.07 * ss, -0.03, 0.12 * ss, 0.04 * ss, 0.03), 0xd9573f);
+  } else {
+    g.add(BOX, at(0, sy - 0.04 * ss, -0.07, 0.8 * ss, 0.12 * ss, 0.05), 0xe2b071);
+    g.add(CYL6, at(0, sy + 0.04 * ss, -0.06, 0.06 * ss, 0.9 * ss, 0.06 * ss, 0, Math.PI / 2), 0xc4553b);
+    g.add(BOX, at(0, sy + 0.1 * ss, -0.04, 0.6 * ss, 0.025, 0.02), 0xf0c93a);
+  }
   for (const x of [-0.5, 0.5]) g.add(BOX, at(x * signScale, 2.62, -0.15, 0.04, 0.3, 0.04), PAL.metal);
   // recipe: chalk menu board (A-frame) in front
   if (up.recipe > 0) {
@@ -170,7 +187,7 @@ export class CartView {
     this.body.receiveShadow = true;
     this.group.add(this.body);
     for (let i = 0; i < 12; i++) {
-      const sm = new Mesh(SAUSAGE, sausageMat);
+      const sm = c.kitchen === 'burger' ? new Mesh(PATTY, pattyMat) : c.kitchen === 'crepe' ? new Mesh(CREPE, crepeMat) : new Mesh(SAUSAGE, sausageMat);
       sm.visible = false;
       sm.castShadow = false;
       this.group.add(sm);

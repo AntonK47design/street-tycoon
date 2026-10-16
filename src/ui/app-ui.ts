@@ -11,6 +11,8 @@ import { Labels } from './labels';
 import { Minigame } from './minigame';
 import { SettingsPanel } from './settings';
 import { Tutorial } from './tutorial';
+import { DailyModal, HireModal, KitchenModal, OfflineModal } from './retention-ui';
+import type { KitchenId } from '../data/kitchens';
 
 const TOP = CITY.curb;
 
@@ -26,11 +28,17 @@ export class AppUi {
   readonly input: CameraInput;
   private placing = false;
   private readonly placeBar: HTMLDivElement;
+  private placeKitchen: KitchenId = 'hotdog';
+  readonly hireModal: HireModal;
+  readonly kitchenModal: KitchenModal;
+  readonly offlineModal: OfflineModal;
+  readonly dailyModal: DailyModal;
 
   constructor(
     private readonly ctx: UiContext,
     settings: Settings,
     tierLabel: () => string,
+    today: () => string,
   ) {
     this.input = new CameraInput(ctx.view.renderer.domElement, ctx.view.camera);
     this.labels = new Labels(ctx);
@@ -41,6 +49,15 @@ export class AppUi {
     this.tutorial = new Tutorial(ctx, this.hud, this.panel, this.labels);
     this.settingsPanel = new SettingsPanel(ctx, settings, tierLabel);
 
+    this.hireModal = new HireModal(ctx);
+    this.kitchenModal = new KitchenModal(ctx);
+    this.offlineModal = new OfflineModal(ctx);
+    this.dailyModal = new DailyModal(ctx, today);
+    this.hud.dailyPending = () => this.dailyModal.pending();
+    this.hud.onDaily = () => this.dailyModal.open();
+    this.panel.onHire = (ci) => this.hireModal.openFor(ci);
+    this.hireModal.onHired = () => this.panel.update(true);
+    this.kitchenModal.onPick = (k) => this.beginPlacing(k);
     this.placeBar = h('div', 'place-bar hidden');
     const cancel = h('button', 'btn', `${icon('close')}<span>${t('place.cancel')}</span>`);
     onTap(cancel, () => this.endPlacing());
@@ -116,12 +133,23 @@ export class AppUi {
       this.ctx.sfx.play('error');
       return;
     }
+    if (sim.unlockedKitchens().length > 1) {
+      this.panel.close();
+      this.kitchenModal.open();
+      return;
+    }
+    this.beginPlacing('hotdog');
+  }
+
+  private beginPlacing(kitchen: KitchenId): void {
+    const sim = this.ctx.sim;
     this.panel.close();
     this.placing = true;
+    this.placeKitchen = kitchen;
     this.tutorial.placing = true;
     const ids = sim.freeSpots().map((s) => s.id);
     this.ctx.view.showMarkers(ids);
-    this.labels.showMarkers(ids);
+    this.labels.showMarkers(ids, kitchen);
     this.placeBar.classList.remove('hidden');
     this.ctx.view.camera.focus(0, 6, 72);
     this.ctx.sfx.play('open');
@@ -137,7 +165,7 @@ export class AppUi {
 
   private place(id: string): void {
     if (!this.placing) return;
-    const ci = this.ctx.sim.buyCart(id);
+    const ci = this.ctx.sim.buyCart(id, this.placeKitchen);
     if (ci < 0) {
       this.ctx.sfx.play('error');
       return;
@@ -185,16 +213,44 @@ export class AppUi {
       case 'upgrade':
         this.ctx.save();
         break;
+      case 'hired': {
+        const w = sim.workerById(e.worker);
+        if (w) this.toasts.show(`${icon('people')}<span>${t('toast.hired', { name: w.name })}</span>`, 'good', 3200);
+        this.panel.update(true);
+        break;
+      }
+      case 'trainingStarted': {
+        const w = sim.workerById(e.worker);
+        if (w) this.toasts.show(`${icon('sun')}<span>${t('toast.training', { name: w.name })}</span>`, 'info');
+        break;
+      }
+      case 'trained': {
+        const w = sim.workerById(e.worker);
+        if (w) this.toasts.show(`${icon('check')}<span>${t('toast.trained', { name: w.name, s: t(`auto.${['', 'cook', 'restock', 'price', 'clean', 'fast'][e.stage]}`) })}</span>`, 'good', 3600);
+        this.ctx.sfx.play('upgrade');
+        this.ctx.save();
+        break;
+      }
+      case 'workerLevel': {
+        const w = sim.workerById(e.worker);
+        const ci = w ? sim.cartIndexOfWorker(w) : -1;
+        const c = sim.state.carts[ci];
+        if (w && c) {
+          const s = sim.spotOf(c);
+          this.labels.popup(s.x, TOP + 3.2, s.z, t('popup.level', { name: w.name, l: e.level }), 'info');
+        }
+        break;
+      }
       default:
         break;
     }
   }
 
   update(dt: number): void {
-    this.input.enabled = !this.minigame.isOpen && !this.settingsPanel.isOpen;
+    this.input.enabled = !this.minigame.isOpen && !this.settingsPanel.isOpen && !this.hireModal.isOpen && !this.kitchenModal.isOpen && !this.offlineModal.isOpen && !this.dailyModal.isOpen;
     this.input.update(dt);
     this.minigame.update(dt);
-    this.tutorial.minigameOpen = this.minigame.isOpen;
+    this.tutorial.minigameOpen = this.minigame.isOpen || this.settingsPanel.isOpen || this.hireModal.isOpen || this.kitchenModal.isOpen || this.offlineModal.isOpen || this.dailyModal.isOpen;
     this.hud.update(dt);
     this.panel.update(false, dt);
     this.labels.update(dt);

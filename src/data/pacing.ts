@@ -21,4 +21,4 @@ export const PACING: readonly MilestoneTarget[] = [
 ];
 
 /** The phase the current build implements (pacing sim skips later milestones). */
-export const CURRENT_PHASE = 1;
+export const CURRENT_PHASE = 2;

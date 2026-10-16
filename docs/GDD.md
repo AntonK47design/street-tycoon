@@ -60,5 +60,11 @@ minigame variant (Phase 2: 3 kitchens total).
 - First customers are patient (tutorial). Tutorial is contextual (arrow + one sentence) and skippable.
 - Saving: autosave every 30 s, on `visibilitychange`/`pagehide`, after purchases. Versioned format.
 
-## Out of scope for Phase 1
-Workers, offline income, daily reward/tasks (Phase 2); real estate (3); production (4); market (5); logistics (6).
+## Phase 2 — Workers & retention
+- Cooks (hire per cart, paid per portion, XP levels), 5 automation stages unlocked by real-time training.
+- Kitchens: Hot Dog, Burger (40 served), Crêpe (150 served). Different kitchens don't compete.
+- Offline earnings (8 h cap, 60 %), "While you were away" popup with an optional 2× rewarded ad.
+- Daily reward (7-day streak) + 3 daily tasks.
+
+## Next
+Real estate & shops (3); production (4); market (5); logistics (6).

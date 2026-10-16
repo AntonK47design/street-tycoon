@@ -1,5 +1,18 @@
 # Changelog
 
+## Phase 2 — Workers & retention (first Basic Launch candidate)
+
+- **Cooks**: hire one per cart from 3 candidates (1–3★, wage per portion only while producing). They cook on their own, gain XP and level up (faster, better dishes).
+- **Automation stages** per cook via training: cooks → buys supplies → sets prices → cleans → works faster. Trainings run on real time (1 min, 40 min, 2 h, 6 h) and keep going while you're away.
+- **Kitchens**: Burger (unlocks at 40 customers served) and Crêpe (150), with their own minigame steps, cart sign and food. Kitchens are picked when buying a cart; different kitchens don't compete.
+- **Offline earnings**: on return (or after a long hidden tab) the absence is credited analytically, capped at 8 h, at 60 % efficiency. A "While you were away" popup shows the result, with a 2× rewarded-ad button behind `VITE_ADS`.
+- **Daily reward** with a 7-day streak and **3 daily tasks** per calendar day. Returning players see them after the offline popup.
+- Goal chain extended to 21 goals: hire, train, new kitchen, long training ("pays off tomorrow").
+- Save format v2 with migration of the Phase 1 quest index.
+- Blocking popups pause the sim and report `gameplayStop`, with nesting handled.
+- World labels are projected after the camera update and snapped to whole pixels, so they no longer lag or jitter. The "Cook!" pulse is calmer.
+- CI on GitHub Actions (check, tests, pacing, size, e2e, zip artifact) and a GitHub Pages deployment.
+
 ## Phase 0 + 1 — Setup and core loop
 
 **Setup (Phase 0)**

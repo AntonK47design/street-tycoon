@@ -7,6 +7,7 @@ import type { CartState } from '../sim/state';
 import type { UiContext } from './context';
 import { h, haptic, icon, onTap, setHtml, setText, toggle } from './dom';
 import type { IconName } from './icons';
+import { StaffBox } from './retention-ui';
 
 const UP_ICON: Record<UpgradeId, IconName> = { grill: 'grill', speed: 'speed', recipe: 'recipe', sign: 'sign', comfort: 'comfort', pantry: 'pantry' };
 
@@ -43,6 +44,9 @@ export class CartPanel {
   private readonly appealBars: Record<'clean' | 'location' | 'price' | 'taste', HTMLElement>;
   private readonly cards = new Map<UpgradeId, UpCard>();
   onCook: (ci: number) => void = () => {};
+  onHire: (ci: number) => void = () => {};
+  readonly staff: StaffBox;
+  private readonly headIcon: HTMLDivElement;
   onClose: () => void = () => {};
 
   constructor(private readonly ctx: UiContext) {
@@ -55,7 +59,8 @@ export class CartPanel {
     onTap(close, () => this.close());
     const titleWrap = h('div', 'title-wrap');
     titleWrap.append(this.title, this.stars);
-    head.append(h('div', 'panel-icon', icon('hotdog')), titleWrap, close);
+    this.headIcon = h('div', 'panel-icon', icon('hotdog'));
+    head.append(this.headIcon, titleWrap, close);
 
     const tabs = h('div', 'tabs');
     this.tabOverview = h('button', 'tab', t('panel.tabOverview'));
@@ -107,7 +112,18 @@ export class CartPanel {
       return row.querySelector('i') as HTMLElement;
     };
     this.appealBars = { clean: mkBar('appeal.clean'), location: mkBar('appeal.location'), price: mkBar('appeal.price'), taste: mkBar('appeal.taste') };
-    this.overview.append(statRow, actions, priceBox, appealBox);
+    this.staff = new StaffBox(ctx);
+    this.staff.onHire = () => this.onHire(this.ci);
+    this.staff.bindTrain(() => {
+      const w = ctx.sim.workerOf(this.ci);
+      if (w && ctx.sim.startTraining(w.id)) {
+        ctx.sfx.play('upgrade');
+        haptic(20);
+        ctx.save();
+      } else ctx.sfx.play('error');
+      this.update(true);
+    });
+    this.overview.append(statRow, actions, this.staff.el, priceBox, appealBox);
 
     // upgrades
     this.upgrades = h('div', 'tab-body upgrades');
@@ -144,6 +160,10 @@ export class CartPanel {
 
   get currentTab(): 'overview' | 'upgrades' {
     return this.tab;
+  }
+
+  get overviewTab(): HTMLElement {
+    return this.tabOverview;
   }
 
   get upgradesTab(): HTMLElement {
@@ -239,6 +259,7 @@ export class CartPanel {
     const cash = this.ctx.sim.state.cash;
     setText(this.title, t('panel.title', { kitchen: t(`kitchen.${c.kitchen}`), n: this.ci + 1 }));
     setHtml(this.stars, starsHtml(rt.stars));
+    setHtml(this.headIcon, icon(c.kitchen === 'burger' ? 'burger' : c.kitchen === 'crepe' ? 'crepe' : 'hotdog'));
     // affordable upgrades badge
     let affordable = 0;
     for (const id of UPGRADE_ORDER) if (c.up[id] < UPGRADES[id].maxLevel && cash >= upgradeCost(id, c.up[id])) affordable++;
@@ -246,7 +267,7 @@ export class CartPanel {
     toggle(this.upBadge, 'hidden', affordable === 0);
 
     if (this.tab === 'overview') {
-      setHtml(this.stock, `${icon('hotdog')}<b>${c.stock}/${stockCap(c)}</b><span>${t('panel.stock')}</span>`);
+      setHtml(this.stock, `${icon(c.kitchen === 'burger' ? 'burger' : c.kitchen === 'crepe' ? 'crepe' : 'hotdog')}<b>${c.stock}/${stockCap(c)}</b><span>${t('panel.stock')}</span>`);
       const lowSup = c.supplies < batchSize(c);
       setHtml(this.supplies, `${icon('box')}<b class="${lowSup ? 'warn' : ''}">${Math.floor(c.supplies)}/${suppliesCap(c)}</b><span>${t('panel.supplies')}</span>`);
       setHtml(this.clean, `${icon('broom')}<b class="${c.clean < 55 ? 'warn' : ''}">${Math.round(c.clean)}%</b><span>${t('panel.clean')}</span>`);
@@ -255,7 +276,7 @@ export class CartPanel {
       this.cookBtn.disabled = can !== 'ok';
       setHtml(
         this.cookBtn,
-        `${icon('flame')}<span>${can === 'full' ? t('panel.full') : can === 'noSupplies' ? t('panel.noSupplies') : can === 'busy' ? t('panel.cooking') : t('panel.cookN', { n: batchSize(c) })}</span>`,
+        `${icon('flame')}<span>${can === 'full' ? t('panel.full') : can === 'noSupplies' ? t('panel.noSupplies') : can === 'busy' ? t('panel.cooking') : t(`panel.cookN.${c.kitchen}`, { n: batchSize(c) })}</span>`,
       );
       const rc = this.ctx.sim.restockPrice(this.ci);
       this.restockBtn.disabled = rc <= 0;
@@ -265,6 +286,7 @@ export class CartPanel {
       this.cleanBtn.disabled = cleaning || c.clean >= 99.5;
       setHtml(this.cleanBtn, `${icon('broom')}<span>${cleaning ? t('panel.cleaning') : t('panel.cleanBtn')}</span>`);
       toggle(this.cleanBtn, 'attention', c.clean < 55 && !cleaning);
+      this.staff.update(this.ci);
       setText(this.price, formatPrice(c.price));
       const pm = priceMult(c);
       const demand = pm > 1.25 ? 'high' : pm > 0.8 ? 'normal' : pm > 0.45 ? 'low' : 'veryLow';

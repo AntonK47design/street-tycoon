@@ -3,6 +3,7 @@ import type { KitchenId } from '../data/kitchens';
 import type { MilestoneId } from '../data/pacing';
 import type { StatKey } from '../data/quests';
 import { UPGRADE_ORDER, type UpgradeId } from '../data/upgrades';
+import type { AutoStage } from '../data/workers';
 
 export type Quality = 0 | 1 | 2;
 
@@ -21,6 +22,34 @@ export interface CartState {
   up: Record<UpgradeId, number>;
   served: number;
   earned: number;
+}
+
+export interface WorkerState {
+  id: number;
+  name: string;
+  stars: 1 | 2 | 3;
+  level: number;
+  xp: number;
+  /** Id of the cart the worker runs (-1 = none). */
+  cart: number;
+  auto: AutoStage;
+  /** Running training: target stage and the world time it finishes. */
+  training: { stage: AutoStage; endsAt: number } | null;
+}
+
+export interface DailyTaskState {
+  idx: number;
+  base: number;
+  claimed: boolean;
+}
+
+/** Real-calendar retention data (dates are local YYYY-MM-DD strings supplied by the app). */
+export interface DailyState {
+  /** Date the current daily tasks were drawn for. */
+  date: string;
+  streak: number;
+  lastClaim: string;
+  tasks: DailyTaskState[];
 }
 
 export interface SideGoalState {
@@ -46,6 +75,13 @@ export interface GameState {
   milestones: Partial<Record<MilestoneId, number>>;
   /** Tutorial/hint flags (UI owned, persisted with the game). */
   flags: Record<string, boolean>;
+  workers: WorkerState[];
+  nextWorkerId: number;
+  /** Workers hired so far (drives candidate generation and prices). */
+  hires: number;
+  /** Seconds of world time: play time plus credited offline time (timers run on this). */
+  worldTime: number;
+  daily: DailyState;
 }
 
 export function emptyUpgrades(): Record<UpgradeId, number> {
@@ -55,7 +91,25 @@ export function emptyUpgrades(): Record<UpgradeId, number> {
 }
 
 export function emptyStats(): Record<StatKey, number> {
-  return { cooks: 0, served: 0, earned: 0, upgrades: 0, carts: 1, priceChanges: 0, cleans: 0, restocks: 0, perfects: 0, bestAppeal: 0, maxUpgradeLevel: 0 };
+  return {
+    cooks: 0,
+    served: 0,
+    earned: 0,
+    upgrades: 0,
+    carts: 1,
+    priceChanges: 0,
+    cleans: 0,
+    restocks: 0,
+    perfects: 0,
+    bestAppeal: 0,
+    maxUpgradeLevel: 0,
+    workers: 0,
+    trainings: 0,
+    longTrainings: 0,
+    kitchens: 1,
+    dailyTasks: 0,
+    workerCooks: 0,
+  };
 }
 
 export function newCart(id: number, spot: string, kitchen: KitchenId, price: number): CartState {
@@ -93,5 +147,10 @@ export function newGameState(seed: number = BALANCE.start.seed, firstSpot = 's_0
     sideNext: 2,
     milestones: {},
     flags: {},
+    workers: [],
+    nextWorkerId: 1,
+    hires: 0,
+    worldTime: 0,
+    daily: { date: '', streak: 0, lastClaim: '', tasks: [] },
   };
 }

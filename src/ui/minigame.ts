@@ -29,6 +29,7 @@ export class Minigame {
   private readonly dots: HTMLDivElement;
   private cart = -1;
   private stages: Stage[] = [];
+  private foods: [string, string] = ['sausage', 'bun'];
   private stage = 0;
   private pos = 0;
   private dir = 1;
@@ -91,9 +92,17 @@ export class Minigame {
     this.seed = (Date.now() % 100000) + 7;
     this.cart = ci;
     this.onDone = onDone;
+    const kitchen = this.ctx.sim.state.carts[ci]?.kitchen ?? 'hotdog';
+    const keys: Record<string, [string, string, string, string]> = {
+      hotdog: ['mg.grill', 'mg.topping', 'sausage', 'bun'],
+      burger: ['mg.flip', 'mg.cheese', 'patty', 'burger'],
+      crepe: ['mg.spread', 'mg.filling', 'crepe', 'fold'],
+    };
+    const [k1, k2, f1, f2] = keys[kitchen] ?? (keys.hotdog as [string, string, string, string]);
+    this.foods = [f1, f2];
     this.stages = [
-      { key: 'mg.grill', zone: 0.58 + this.rnd() * 0.22, speed: 1 },
-      { key: 'mg.topping', zone: 0.25 + this.rnd() * 0.5, speed: 1.18 },
+      { key: k1, zone: 0.58 + this.rnd() * 0.22, speed: 1 },
+      { key: k2, zone: 0.25 + this.rnd() * 0.5, speed: 1.18 },
     ];
     this.stage = 0;
     this.score = 0;
@@ -117,7 +126,7 @@ export class Minigame {
     this.zoneGood.style.width = `${g * 200}%`;
     this.zonePerfect.style.left = `${(s.zone - p) * 100}%`;
     this.zonePerfect.style.width = `${p * 200}%`;
-    this.food.className = `mg-food ${this.stage === 0 ? 'sausage' : 'bun'}`;
+    this.food.className = `mg-food ${this.foods[this.stage === 0 ? 0 : 1]}`;
     this.dots.innerHTML = this.stages.map((_, i) => `<i class="${i < this.stage ? 'done' : i === this.stage ? 'cur' : ''}"></i>`).join('');
     this.result.className = 'mg-result';
     this.result.textContent = '';

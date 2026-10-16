@@ -4,7 +4,8 @@ import { runPacing } from '../src/sim/bot';
 import { Sim } from '../src/sim/sim';
 import { newGameState } from '../src/sim/state';
 
-const MINUTES = Number(process.argv[2] ?? 15);
+// long enough to reach the end of every corridor checked in this phase
+const MINUTES = Number(process.argv[2] ?? Math.ceil(Math.max(...PACING.filter((p) => p.phase <= CURRENT_PHASE).map((p) => p.max)) / 60) + 2);
 const RUNS = Number(process.argv[3] ?? 5);
 const fmt = (s: number): string => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 

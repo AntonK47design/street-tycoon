@@ -575,7 +575,7 @@ body {
 }
 
 .badge.urgent {
-  animation: pulse 0.9s ease-in-out infinite;
+  animation: pulse 1.6s ease-in-out infinite;
 }
 
 .badge.cooking {
@@ -600,7 +600,7 @@ body {
     scale: 1;
   }
   50% {
-    scale: 1.1;
+    scale: 1.04;
   }
 }
 
@@ -1551,4 +1551,439 @@ body {
 
 .compact:not(.portrait) .new-cart .lbl {
   display: none;
+}
+
+/* ---------------------------------------------------------------- minigame foods (burger, crêpe) */
+.mg-food.patty::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  width: 64px;
+  height: 30px;
+  margin-left: -32px;
+  border-radius: 50%;
+  background: color-mix(in srgb, #d9877a, #5a2f1c calc(var(--cook) * 100%));
+  box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.18);
+}
+
+.mg-food.burger::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  width: 80px;
+  height: 36px;
+  margin-left: -40px;
+  border-radius: 40px 40px 10px 10px;
+  background: #e2a85e;
+  box-shadow: inset 0 -12px 0 #6b3d24;
+}
+
+.mg-food.burger::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 22px;
+  height: 7px;
+  width: calc(84px * var(--cook));
+  margin-left: -42px;
+  border-radius: 3px;
+  background: #f2c14e;
+}
+
+.mg-food.crepe::before,
+.mg-food.fold::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 22px;
+  height: 18px;
+  width: calc(30px + 100px * var(--cook));
+  margin-left: calc((30px + 100px * var(--cook)) / -2);
+  border-radius: 50%;
+  background: #f1d29a;
+  box-shadow: inset 0 -3px 0 #d9ad6a;
+}
+
+.mg-food.fold::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  width: 60px;
+  height: 14px;
+  margin-left: -30px;
+  border-radius: 999px;
+  background: #6b3d24;
+  transform: scaleX(var(--cook));
+}
+
+/* ---------------------------------------------------------------- phase 2: staff, modals, daily */
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modal-sub {
+  color: var(--ink2);
+}
+
+.modal-note {
+  font-size: 14px;
+  color: var(--ink2);
+}
+
+.modal-note.good {
+  color: var(--green-d);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.modal-actions .btn {
+  flex: 1;
+}
+
+.btn.ad {
+  background: linear-gradient(#ffe39a, var(--gold));
+  box-shadow: 0 4px 0 var(--gold-d);
+}
+
+.cand,
+.worker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: var(--paper2);
+}
+
+.worker {
+  background: transparent;
+  padding: 0;
+}
+
+.cand-face {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #cfe3dc;
+  color: var(--teal);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.cand-face .ic {
+  width: 28px;
+  height: 28px;
+}
+
+.cand-mid {
+  flex: 1;
+  min-width: 0;
+}
+
+.cand-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 800;
+}
+
+.cand-info {
+  font-size: 14px;
+  color: var(--ink2);
+}
+
+.mini-stars {
+  display: inline-flex;
+}
+
+.mini-stars > span {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  color: #e2d5bd;
+}
+
+.mini-stars > span.on {
+  color: #f2b73a;
+}
+
+.mini-stars .ic {
+  width: 16px;
+  height: 16px;
+}
+
+.staff-box {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.staff-empty {
+  font-size: 14px;
+  color: var(--ink2);
+}
+
+.goal-bar.xp {
+  height: 6px;
+  margin-top: 4px;
+}
+
+.stages {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;
+  margin-top: 6px;
+}
+
+.stage {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--ink2);
+}
+
+.stage .ic {
+  width: 16px;
+  height: 16px;
+  color: #c9bba2;
+}
+
+.stage.on {
+  color: var(--ink);
+}
+
+.stage.on .ic {
+  color: var(--green);
+}
+
+.stage.run .ic {
+  color: #e7a32b;
+  animation: flicker 0.8s infinite alternate;
+}
+
+.stage b {
+  margin-left: auto;
+  white-space: nowrap;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn .cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.btn.train {
+  min-width: 0;
+  font-size: 14px;
+}
+
+.btn.buy.poor .cost {
+  background: rgba(58, 44, 34, 0.08);
+}
+
+.kitchen-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.kitchen-card {
+  pointer-events: auto;
+  position: relative;
+  min-height: 92px;
+  padding: 12px 10px 10px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--paper2);
+  border-top: 10px solid var(--kc);
+  box-shadow: 0 4px 0 var(--line);
+  cursor: pointer;
+  text-align: left;
+}
+
+.kitchen-card.locked {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.kc-name {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 19px;
+}
+
+.kc-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--ink2);
+}
+
+.kc-info .ic {
+  width: 14px;
+  height: 14px;
+}
+
+.kc-new {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 1px 8px;
+  border-radius: 8px;
+  background: var(--red);
+  color: #fff;
+  font-size: 12px;
+}
+
+.offline-big {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 44px;
+  color: #8a5d0e;
+  animation: goal-in 0.5s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+
+.offline-big .coin {
+  width: 52px;
+  height: 52px;
+}
+
+.reward-strip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+}
+
+.reward-day {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px;
+  border-radius: 12px;
+  background: var(--paper2);
+  font-size: 12px;
+}
+
+.reward-day .coin {
+  width: 22px;
+  height: 22px;
+}
+
+.reward-day.now {
+  background: #fff1c6;
+  box-shadow: 0 0 0 3px var(--gold);
+  animation: attention 1.2s infinite;
+}
+
+.reward-day.got {
+  opacity: 0.6;
+}
+
+.rd-v {
+  font-weight: 800;
+}
+
+.rd-check {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  color: var(--green);
+}
+
+.rd-check .ic {
+  width: 16px;
+  height: 16px;
+}
+
+.task {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: var(--paper2);
+}
+
+.task-mid {
+  flex: 1;
+}
+
+.task-name {
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.task.claimed {
+  opacity: 0.6;
+}
+
+.task .btn {
+  min-width: 92px;
+}
+
+.daily-btn {
+  position: relative;
+}
+
+.daily-btn .ic {
+  color: #e7a32b;
+}
+
+.daily-btn .tab-badge {
+  top: -6px;
+  right: -6px;
+}
+
+.daily-btn.pending {
+  animation: attention 1.2s infinite;
+}
+
+.badge .staff-ic {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 8px;
+  background: #cfe3dc;
+  color: var(--teal);
+}
+
+.badge .staff-ic .ic {
+  width: 18px;
+  height: 18px;
+}
+
+.compact .reward-day {
+  font-size: 11px;
+  padding: 4px 1px;
+}
+
+.compact .offline-big {
+  font-size: 34px;
 }

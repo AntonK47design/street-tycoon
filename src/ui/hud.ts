@@ -22,6 +22,10 @@ export class Hud {
   private tick = 0;
   onNewCart: () => void = () => {};
   onSettings: () => void = () => {};
+  onDaily: () => void = () => {};
+  dailyPending: () => number = () => 0;
+  readonly dailyBtn: HTMLButtonElement;
+  private readonly dailyBadge: HTMLSpanElement;
 
   constructor(private readonly ctx: UiContext) {
     const tl = h('div', 'hud tl');
@@ -52,7 +56,12 @@ export class Hud {
     this.settingsBtn = h('button', 'icon-btn', icon('gear'));
     this.settingsBtn.setAttribute('aria-label', t('ui.settings'));
     onTap(this.settingsBtn, () => this.onSettings());
-    tr.append(this.clock, this.settingsBtn);
+    this.dailyBtn = h('button', 'icon-btn daily-btn hidden', icon('sun'));
+    this.dailyBtn.setAttribute('aria-label', t('daily.title'));
+    this.dailyBadge = h('span', 'tab-badge hidden');
+    this.dailyBtn.append(this.dailyBadge);
+    onTap(this.dailyBtn, () => this.onDaily());
+    tr.append(this.clock, this.dailyBtn, this.settingsBtn);
 
     const bl = h('div', 'hud bl');
     this.newCart = h('button', 'btn new-cart', '');
@@ -134,6 +143,12 @@ export class Hud {
       this.clock,
       `${icon('sun')}<span>${t('hud.day', { d: st.day })} · ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}</span>${rush ? `<b class="rush">${t(hh < 15 ? 'hud.lunchRush' : 'hud.dinnerRush')}</b>` : ''}`,
     );
+    // daily rewards / tasks (after the second cart, so the first minutes stay focused)
+    const pend = this.dailyPending();
+    toggle(this.dailyBtn, 'hidden', st.quest < 4);
+    setText(this.dailyBadge, String(pend));
+    toggle(this.dailyBadge, 'hidden', pend === 0);
+    toggle(this.dailyBtn, 'pending', pend > 0);
     // new cart button
     const cost = sim.nextCartCost();
     const spots = sim.freeSpots().length;

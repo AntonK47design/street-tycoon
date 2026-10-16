@@ -1,12 +1,13 @@
 import { BALANCE } from '../data/balance';
 import { KITCHENS } from '../data/kitchens';
-import { QUESTS, SIDE_GOALS } from '../data/quests';
+import { DAILY_TASKS, QUESTS, QUESTS_V1, SIDE_GOALS } from '../data/quests';
+import { WORKERS } from '../data/workers';
 import { UPGRADES, UPGRADE_ORDER } from '../data/upgrades';
-import { emptyStats, emptyUpgrades, newGameState, type CartState, type GameState } from '../sim/state';
+import { emptyStats, emptyUpgrades, newGameState, type CartState, type DailyState, type GameState, type WorkerState } from '../sim/state';
 
 export const SAVE_KEY = 'save';
 export const SAVE_BACKUP_KEY = 'save_backup';
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 export type QualitySetting = 'auto' | 'low' | 'medium' | 'high';
 
@@ -49,6 +50,17 @@ type Migration = (raw: Record<string, unknown>) => Record<string, unknown>;
 export const MIGRATIONS: Record<number, Migration> = {
   // 0 → 1: pre-release blobs had no version field
   0: (raw) => ({ ...raw, v: 1 }),
+  // 1 → 2: Phase 2 rewrote the quest chain. Map the saved index by quest id (finished quests stay finished).
+  1: (raw) => {
+    const game = raw.game;
+    if (isObj(game) && typeof game.quest === 'number') {
+      const oldId = QUESTS_V1[game.quest];
+      const idx = oldId ? QUESTS.findIndex((q) => q.id === oldId) : -1;
+      // a quest that no longer exists: resume at the first new Phase 2 goal (index of q_hire)
+      game.quest = idx >= 0 ? idx : Math.min(game.quest, QUESTS.findIndex((q) => q.id === 'q_hire'));
+    }
+    return { ...raw, v: 2 };
+  },
 };
 
 export function migrate(raw: Record<string, unknown>): Record<string, unknown> {
@@ -122,9 +134,57 @@ export function normalizeGame(raw: unknown): GameState {
     sideNext: Math.floor(num(raw.sideNext, 2, 0, SIDE_GOALS.length)),
     milestones,
     flags,
+    workers: [],
+    nextWorkerId: 1,
+    hires: 0,
+    worldTime: num(raw.worldTime, num(raw.time, 0, 0), 0),
+    daily: normalizeDaily(raw.daily),
   };
+  const cartIds = new Set(g.carts.map((c) => c.id));
+  const used = new Set<number>();
+  if (Array.isArray(raw.workers)) {
+    for (const w of raw.workers) {
+      const n = normalizeWorker(w, cartIds);
+      if (!n) continue;
+      if (n.cart >= 0 && used.has(n.cart)) n.cart = -1;
+      if (n.cart >= 0) used.add(n.cart);
+      g.workers.push(n);
+    }
+  }
+  g.nextWorkerId = Math.floor(num(raw.nextWorkerId, g.workers.reduce((m, w) => Math.max(m, w.id), 0) + 1, 1));
+  g.hires = Math.floor(num(raw.hires, g.workers.length, g.workers.length));
   g.stats.carts = g.carts.length;
+  g.stats.workers = g.workers.length;
+  g.stats.kitchens = new Set(g.carts.map((c) => c.kitchen)).size;
   return g;
+}
+
+function normalizeWorker(raw: unknown, cartIds: Set<number>): WorkerState | null {
+  if (!isObj(raw)) return null;
+  const stage = (x: unknown): 1 | 2 | 3 | 4 | 5 => Math.floor(num(x, 1, 1, 5)) as 1 | 2 | 3 | 4 | 5;
+  const cart = Math.floor(num(raw.cart, -1));
+  const tr = isObj(raw.training) && isNum(raw.training.endsAt) ? { stage: stage(raw.training.stage), endsAt: raw.training.endsAt } : null;
+  return {
+    id: Math.floor(num(raw.id, 1, 1)),
+    name: typeof raw.name === 'string' ? raw.name.slice(0, 24) : (WORKERS.names[0] as string),
+    stars: Math.floor(num(raw.stars, 1, 1, 3)) as 1 | 2 | 3,
+    level: Math.floor(num(raw.level, 1, 1, WORKERS.maxLevel)),
+    xp: num(raw.xp, 0, 0),
+    cart: cartIds.has(cart) ? cart : -1,
+    auto: stage(raw.auto),
+    training: tr,
+  };
+}
+
+function normalizeDaily(raw: unknown): DailyState {
+  const d: DailyState = { date: '', streak: 0, lastClaim: '', tasks: [] };
+  if (!isObj(raw)) return d;
+  d.date = typeof raw.date === 'string' ? raw.date : '';
+  d.lastClaim = typeof raw.lastClaim === 'string' ? raw.lastClaim : '';
+  d.streak = Math.floor(num(raw.streak, 0, 0, 1e6));
+  if (Array.isArray(raw.tasks))
+    for (const t of raw.tasks.slice(0, 5)) if (isObj(t) && isNum(t.idx) && t.idx < DAILY_TASKS.length) d.tasks.push({ idx: Math.floor(t.idx), base: num(t.base, 0), claimed: t.claimed === true });
+  return d;
 }
 
 function normalizeSettings(raw: unknown): Settings {

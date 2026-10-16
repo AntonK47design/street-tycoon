@@ -29,7 +29,7 @@ export function ingredientCost(c: CartState): number {
 }
 
 export function serveSec(c: CartState): number {
-  return C.serveSec * Math.pow(1 - UPGRADES.speed.perLevel, c.up.speed);
+  return C.serveSec * KITCHENS[c.kitchen].serveMul * Math.pow(1 - UPGRADES.speed.perLevel, c.up.speed);
 }
 
 export function reach(c: CartState): number {
