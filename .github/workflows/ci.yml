@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck + lint
+        run: npm run check
+      - name: Unit tests
+        run: npm test
+      - name: Pacing simulator
+        run: npm run sim:pacing
+      - name: Size budget
+        run: npm run size
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: E2E smoke (desktop + mobile)
+        run: npm run e2e
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: |
+            screenshots/
+            test-results/
+          if-no-files-found: ignore
+      - name: Build upload zip
+        run: npm run zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: street-tycoon-zip
+          path: street-tycoon.zip
