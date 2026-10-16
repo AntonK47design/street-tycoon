@@ -8,29 +8,26 @@ test('returning after 2 h: offline earnings popup, then daily reward', async ({ 
   await page.goto('/');
   await waitForGameplay(page);
   // a player with a cook, past the second cart, who left two hours ago yesterday
-  const blob = await page.evaluate(() => {
+  await page.evaluate(() => {
     const st = (window as unknown as { __st: Any }).__st as {
       sim: { state: Any & { cash: number; quest: number }; hire(k: number, ci: number): number };
       loop: { simPaused: boolean };
+      platform: { dataGet(k: string): string | null; dataSet(k: string, v: string): void };
       save(): void;
+      freezeSaves(): void;
     };
     st.sim.state.cash = 1000;
     st.sim.hire(0, 0);
     st.sim.state.quest = 6;
     st.loop.simPaused = true;
     st.save();
-    const raw = JSON.parse(localStorage.getItem('st_save') as string) as Any & { savedAt: number; stats: Any };
+    // through the platform layer: the SDK (when it loads) stores data under its own keys
+    const raw = JSON.parse(st.platform.dataGet('save') as string) as Any & { savedAt: number; stats: Any };
     raw.savedAt -= 2 * 3600 * 1000;
     raw.stats.lastDay = '2000-01-01';
-    return JSON.stringify(raw);
+    st.platform.dataSet('save', JSON.stringify(raw));
+    st.freezeSaves();
   });
-  // the reload itself saves on pagehide, so inject the doctored save before the next boot
-  await page.addInitScript((b) => {
-    if (!sessionStorage.getItem('st_injected')) {
-      sessionStorage.setItem('st_injected', '1');
-      localStorage.setItem('st_save', b);
-    }
-  }, blob);
   const cashBefore = 1000 - 220;
   await page.reload();
   await waitForGameplay(page);

@@ -91,7 +91,9 @@ async function boot(): Promise<void> {
   let blocking = false;
   let blockCount = 0;
   let playStart = performance.now();
+  let savesFrozen = false;
   const save = (): void => {
+    if (savesFrozen) return;
     blob.game = sim.state;
     blob.stats.playSec += (performance.now() - playStart) / 1000;
     playStart = performance.now();
@@ -235,7 +237,20 @@ async function boot(): Promise<void> {
   document.addEventListener('dblclick', (e) => e.preventDefault());
 
   if (TEST_HOOKS) {
-    window.__st = { sim, view, ui, platform, blob: (): SaveBlob => blob, save, loop, fps: (): number => fps };
+    window.__st = {
+      sim,
+      view,
+      ui,
+      platform,
+      blob: (): SaveBlob => blob,
+      save,
+      loop,
+      fps: (): number => fps,
+      /** e2e: stop all writes so a doctored save survives the reload. */
+      freezeSaves: (): void => {
+        savesFrozen = true;
+      },
+    };
   }
   if (DEBUG) {
     void import('./ui/debug').then(({ DebugOverlay }) => new DebugOverlay(uiRoot, { sim, view, platform, loop: loop as FixedLoop, fps: () => fps }));
