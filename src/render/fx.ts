@@ -43,7 +43,7 @@ export class Fx {
     coinGeo.rotateX(Math.PI / 2);
     this.coinMesh = this.mk(coinGeo, new MeshLambertMaterial({ color: 0xf2c14e, emissive: 0x7a5410 }), this.coins.length, scene);
     this.coinMesh.castShadow = true;
-    this.smokeMesh = this.mk(new IcosahedronGeometry(0.2, 0), new MeshBasicMaterial({ color: 0xf4efe8, transparent: true, opacity: 0.55, depthWrite: false }), this.smoke.length, scene);
+    this.smokeMesh = this.mk(new IcosahedronGeometry(0.2, 0), new MeshBasicMaterial({ color: 0xf4efe8, transparent: true, opacity: 0.38, depthWrite: false }), this.smoke.length, scene);
     this.sparkMesh = this.mk(new IcosahedronGeometry(0.09, 0), new MeshBasicMaterial({ color: 0xffe08a }), this.sparks.length, scene);
     this.sprayMesh = this.mk(new IcosahedronGeometry(0.06, 0), new MeshBasicMaterial({ color: 0xd9f1f7, transparent: true, opacity: 0.85 }), this.spray.length, scene);
   }
@@ -88,7 +88,7 @@ export class Fx {
   }
 
   puff(x: number, y: number, z: number): void {
-    this.spawn(this.smoke, x + (this.rnd() - 0.5) * 0.4, y, z + (this.rnd() - 0.5) * 0.3, (this.rnd() - 0.5) * 0.2, 0.9 + this.rnd() * 0.4, (this.rnd() - 0.5) * 0.2, 1.4, 0.8 + this.rnd() * 0.6, -0.2);
+    this.spawn(this.smoke, x + (this.rnd() - 0.5) * 0.4, y, z + (this.rnd() - 0.5) * 0.3, (this.rnd() - 0.5) * 0.2, 0.9 + this.rnd() * 0.4, (this.rnd() - 0.5) * 0.2, 1.2, 0.45 + this.rnd() * 0.35, -0.2);
   }
 
   sparkle(x: number, y: number, z: number, n: number): void {

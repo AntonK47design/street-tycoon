@@ -398,7 +398,7 @@ export class GameView {
       const rt = this.sim.runtime[ci];
       if (!cv || !c || !rt) continue;
       cv.update(c, dt, this.time, rt.cooking);
-      if (rt.cooking && Math.random() < dt * 9) this.fx.puff(cv.spot.x - cv.spot.fx * 0.05 + (cv.spot.fz ? 0.45 : 0), TOP + 1.45, cv.spot.z - cv.spot.fz * 0.05 - (cv.spot.fx ? 0.45 : 0));
+      if (rt.cooking && Math.random() < dt * 5) this.fx.puff(cv.spot.x - cv.spot.fx * 0.05 + (cv.spot.fz ? 0.45 : 0), TOP + 1.45, cv.spot.z - cv.spot.fz * 0.05 - (cv.spot.fx ? 0.45 : 0));
       const working = rt.cooking || (rt.serveT > 0 && rt.queue.length > 0) ? 1 : 0;
       lookFromSeed(c.id * 7919 + 13, look);
       look.shirt = 0xf3efe6;
