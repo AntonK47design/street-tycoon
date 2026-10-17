@@ -1,4 +1,5 @@
 import { CITY } from '../data/city';
+import { QUESTS } from '../data/quests';
 import type { KitchenId } from '../data/kitchens';
 import { formatCash, t } from '../core/i18n';
 import { batchSize } from '../sim/cart';
@@ -10,6 +11,7 @@ import { ICON } from './icons';
 import { starsHtml } from './cart-panel';
 
 const TOP = CITY.curb;
+const RENT_FROM = QUESTS.findIndex((q) => q.id === 'q_rent');
 const KITCHEN_ICON: Partial<Record<KitchenId, 'hotdog' | 'burger' | 'crepe'>> = { hotdog: 'hotdog', burger: 'burger', crepe: 'crepe' };
 
 interface Badge {
@@ -27,6 +29,8 @@ export class Labels {
   private markerIds: string[] = [];
   private readonly sp: ScreenPoint = { x: 0, y: 0, visible: false };
   onBadge: (ci: number) => void = () => {};
+  onProperty: (pi: number) => void = () => {};
+  private readonly propLabels: Array<{ el: HTMLDivElement; key: string }> = [];
   onMarker: (spot: string) => void = () => {};
 
   constructor(private readonly ctx: UiContext) {
@@ -42,6 +46,46 @@ export class Labels {
       this.layer.append(e);
       this.popups.push({ el: e, x: 0, y: 0, z: 0, t: 0 });
     }
+  }
+
+  propertyEl(pi: number): HTMLElement | undefined {
+    return this.propLabels[pi]?.el;
+  }
+
+  private updateProperties(): void {
+    const { sim, view } = this.ctx;
+    const props = sim.city.properties;
+    while (this.propLabels.length < props.length) {
+      const pi = this.propLabels.length;
+      const el = h('div', 'prop-label');
+      onTap(el, () => this.onProperty(pi));
+      this.layer.append(el);
+      this.propLabels.push({ el, key: '' });
+    }
+    const showFree = sim.state.quest >= RENT_FROM;
+    props.forEach((pr, pi) => {
+      const lab = this.propLabels[pi] as { el: HTMLDivElement; key: string };
+      const b = sim.city.buildings[pr.building];
+      const g = sim.shops.grid(pi);
+      const p = sim.shops.property(pi);
+      if (!b || !g || (!p && !showFree) || view.cutaway === pi) {
+        toggle(lab.el, 'hidden', true);
+        return;
+      }
+      const sp = view.project(g.door.x + g.door.nx * 1.6, TOP + 4.6, g.door.z + g.door.nz * 1.6, this.sp);
+      toggle(lab.el, 'hidden', !sp.visible);
+      if (!sp.visible) return;
+      lab.el.style.transform = `translate3d(${Math.round(sp.x)}px, ${Math.round(sp.y)}px, 0) translate(-50%, -100%)`;
+      const rt = sim.shops.runtime.get(pi);
+      const low = p?.shop ? sim.shops.stockFraction(pi) < 0.3 : false;
+      const closed = p?.shop ? !rt?.rating.open : false;
+      const key = p ? `${p.shop?.kind}|${low}|${closed}` : `free|${sim.shops.info(pi)?.rentPerDay}`;
+      if (key === lab.key) return;
+      lab.key = key;
+      lab.el.className = `prop-label${p ? ' mine' : ''}`;
+      if (!p) lab.el.innerHTML = `${icon('key')}<span>${t('prop.forRentShort', { v: formatCash(sim.shops.info(pi)?.rentPerDay ?? 0) })}</span>`;
+      else lab.el.innerHTML = `${icon('shop')}<span>${t(`shop.${p.shop?.kind ?? 'snack'}`)}</span>${low ? `<span class="warn-ic">${icon('box')}</span>` : ''}${closed ? `<span class="warn-ic">${icon('lock')}</span>` : ''}`;
+    });
   }
 
   badgeEl(ci: number): HTMLElement | undefined {
@@ -102,6 +146,7 @@ export class Labels {
   update(dt: number): void {
     const { sim, view } = this.ctx;
     this.ensureBadges();
+    this.updateProperties();
     const st = sim.state;
     // cart badges
     for (let ci = 0; ci < this.badges.length; ci++) {

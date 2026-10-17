@@ -5,6 +5,7 @@ import { batchSize, ingredientCost, serveSec } from './cart';
 import type { Sim } from './sim';
 import type { GameState } from './state';
 import { addXp, workerCookSec, workerWage } from './workers';
+import { DAY_SEC } from './shops';
 
 export interface OfflineReport {
   /** Seconds credited (after the cap). */
@@ -15,6 +16,11 @@ export interface OfflineReport {
   served: number;
   /** Trainings that finished while away. */
   trained: number;
+  /** Shop revenue while away. */
+  shops: number;
+  /** Net rent (+ tenants, − rented shops). */
+  rent: number;
+  tenants: number;
 }
 
 /** Average hunger over the game day (offline has no rush hours). */
@@ -39,13 +45,19 @@ function averageHunger(): number {
 export function applyOffline(sim: Sim, awaySec: number): OfflineReport {
   const st = sim.state;
   const seconds = Math.max(0, Math.min(RETENTION.offlineCapSec, awaySec));
-  const report: OfflineReport = { seconds, away: Math.max(0, awaySec), earned: 0, served: 0, trained: 0 };
+  const report: OfflineReport = { seconds, away: Math.max(0, awaySec), earned: 0, served: 0, trained: 0, shops: 0, rent: 0, tenants: 0 };
   // trainings run on real time, uncapped up to a day
   const before = st.workers.filter((w) => w.training).length;
   st.worldTime += Math.max(0, Math.min(awaySec, 24 * 3600));
   sim.tickTraining();
   report.trained = before - st.workers.filter((w) => w.training).length;
+  report.tenants = sim.shops.settleRenovations();
   if (seconds <= 0) return report;
+  const shop = sim.shops.creditOffline(seconds, RETENTION.offlineEfficiency);
+  report.shops = Math.round(shop.earned * 100) / 100;
+  const rent = (sim.shops.rentBalancePerDay() * seconds) / DAY_SEC;
+  report.rent = Math.round(rent * 100) / 100;
+  st.cash = Math.max(0, st.cash + rent);
   const hunger = averageHunger();
   const eff = RETENTION.offlineEfficiency;
   st.carts.forEach((c, ci) => {
@@ -87,7 +99,7 @@ export function applyOffline(sim: Sim, awaySec: number): OfflineReport {
     report.earned += earned;
     report.served += sold;
   });
-  report.earned = Math.round(report.earned * 100) / 100;
+  report.earned = Math.round((report.earned + report.shops + Math.max(0, report.rent)) * 100) / 100;
   return report;
 }
 

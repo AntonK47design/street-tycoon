@@ -5,6 +5,7 @@ import de from '../../src/data/locales/de.json';
 import en from '../../src/data/locales/en.json';
 import { QUESTS, SIDE_GOALS } from '../../src/data/quests';
 import { UPGRADE_ORDER } from '../../src/data/upgrades';
+import { FURNITURE_ORDER, PRODUCTS, SHOP_KINDS } from '../../src/data/shops';
 
 const files = (d: string): string[] => readdirSync(d).flatMap((n) => (statSync(join(d, n)).isDirectory() ? files(join(d, n)) : n.endsWith('.ts') ? [join(d, n)] : []));
 
@@ -25,6 +26,9 @@ describe('locales', () => {
 
   it('has names for quests and upgrades', () => {
     for (const q of [...QUESTS, ...SIDE_GOALS]) expect(en).toHaveProperty([`quest.${q.id}`]);
+    for (const p of PRODUCTS) expect(en).toHaveProperty([`prod.${p.id}`]);
+    for (const f of FURNITURE_ORDER) expect(en).toHaveProperty([`furn.${f}`]);
+    for (const k of SHOP_KINDS) expect(en).toHaveProperty([`shop.${k}`]);
     for (const id of UPGRADE_ORDER) {
       expect(en).toHaveProperty([`up.${id}.name`]);
       expect(en).toHaveProperty([`up.${id}.fx`]);

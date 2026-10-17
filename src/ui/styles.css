@@ -1987,3 +1987,268 @@ body {
 .compact .offline-big {
   font-size: 34px;
 }
+
+/* ---------------------------------------------------------------- phase 3: properties, shops, editor */
+.panel-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink2);
+}
+
+.panel-sub .st {
+  width: 14px;
+  height: 14px;
+}
+
+.kitchen-card.picked {
+  box-shadow: 0 0 0 3px var(--kc), 0 4px 0 var(--line);
+  background: #fff4dc;
+}
+
+.stat-row.three {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.price-row {
+  display: grid;
+  grid-template-columns: 1fr 44px 64px 44px;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.price-row .pn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.price-row .dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+}
+
+.price-row .pv {
+  text-align: center;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.price-row .pv.hi {
+  color: var(--red-d);
+}
+
+.price-row .pv.lo {
+  color: var(--blue);
+}
+
+.btn.round.small {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  font-size: 22px;
+}
+
+.modal-note.warn {
+  color: var(--red-d);
+}
+
+.rating-pct {
+  margin-left: auto;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.prop-label {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 40px;
+  padding: 4px 12px 4px 8px;
+  border-radius: 999px;
+  background: #fff1c6;
+  box-shadow: var(--sh);
+  font-size: 15px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.prop-label .ic {
+  width: 22px;
+  height: 22px;
+  color: var(--gold-d);
+}
+
+.prop-label.mine {
+  background: var(--paper);
+}
+
+.prop-label.mine .ic {
+  color: var(--teal);
+}
+
+.prop-label .warn-ic {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 8px;
+  background: #ffe0d6;
+  color: var(--red-d);
+}
+
+.prop-label .warn-ic .ic {
+  width: 16px;
+  height: 16px;
+  color: var(--red-d);
+}
+
+.editor-bar {
+  pointer-events: auto;
+  position: absolute;
+  left: calc(var(--gap) + var(--safe-l));
+  right: calc(var(--gap) + var(--safe-r));
+  bottom: calc(var(--gap) + var(--safe-b));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 6;
+}
+
+.editor-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-rating {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 14px;
+  background: var(--paper);
+  box-shadow: var(--sh);
+  font-weight: 800;
+}
+
+.editor-rating .ic {
+  color: #f2b73a;
+}
+
+.editor-rating .warn {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 8px;
+  background: var(--red);
+  color: #fff;
+  font-size: 13px;
+}
+
+.editor-catalog {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px;
+  border-radius: 18px;
+  background: var(--paper);
+  box-shadow: var(--sh);
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+
+.cat-item {
+  pointer-events: auto;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 88px;
+  min-height: 72px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--paper2);
+  box-shadow: 0 3px 0 var(--line);
+  cursor: pointer;
+}
+
+.cat-item .sw {
+  width: 30px;
+  height: 18px;
+  border-radius: 6px;
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.15);
+}
+
+.cat-item .cn {
+  font-size: 14px;
+}
+
+.cat-item .cc {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  color: #8a5d0e;
+}
+
+.cat-item .cc .ic {
+  width: 14px;
+  height: 14px;
+}
+
+.cat-item.poor {
+  opacity: 0.55;
+}
+
+.editor-ctx {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 18px;
+  background: var(--paper);
+  box-shadow: var(--sh);
+}
+
+.ctx-name {
+  font-weight: 800;
+  margin: 0 6px;
+}
+
+.ctx-hint {
+  flex-basis: 100%;
+  font-size: 13px;
+  color: var(--ink2);
+  margin-left: 6px;
+}
+
+.editor-ctx .btn {
+  min-height: 48px;
+}
+
+.editor-ctx .btn .ic {
+  width: 20px;
+  height: 20px;
+}
+
+.btn.icon-only span:empty {
+  display: none;
+}
+
+.editing .hud.bl,
+.editing .side-goals,
+.editing .toasts {
+  display: none;
+}

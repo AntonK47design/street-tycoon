@@ -11,10 +11,14 @@ import { Labels } from './labels';
 import { Minigame } from './minigame';
 import { SettingsPanel } from './settings';
 import { Tutorial } from './tutorial';
+import { PropertyPanel } from './property-panel';
+import { RoomEditor } from './editor';
+import { QUESTS } from '../data/quests';
 import { DailyModal, HireModal, KitchenModal, OfflineModal } from './retention-ui';
 import type { KitchenId } from '../data/kitchens';
 
 const TOP = CITY.curb;
+const RENT_FROM = QUESTS.findIndex((q) => q.id === 'q_rent');
 
 /** Composes the overlay and routes input between world, panels and the minigame. */
 export class AppUi {
@@ -33,6 +37,8 @@ export class AppUi {
   readonly kitchenModal: KitchenModal;
   readonly offlineModal: OfflineModal;
   readonly dailyModal: DailyModal;
+  readonly propertyPanel: PropertyPanel;
+  readonly editor: RoomEditor;
 
   constructor(
     private readonly ctx: UiContext,
@@ -58,6 +64,16 @@ export class AppUi {
     this.panel.onHire = (ci) => this.hireModal.openFor(ci);
     this.hireModal.onHired = () => this.panel.update(true);
     this.kitchenModal.onPick = (k) => this.beginPlacing(k);
+    this.propertyPanel = new PropertyPanel(ctx);
+    this.editor = new RoomEditor(ctx);
+    this.propertyPanel.onEdit = (pi) => {
+      this.propertyPanel.close();
+      this.editor.enter(pi);
+    };
+    this.propertyPanel.onHireCashier = (pi) => this.hireModal.openForShop(pi);
+    this.editor.onExit = (pi) => this.openProperty(pi);
+    this.labels.onProperty = (pi) => this.openProperty(pi);
+    this.tutorial.shop = { panel: this.propertyPanel, editor: this.editor };
     this.placeBar = h('div', 'place-bar hidden');
     const cancel = h('button', 'btn', `${icon('close')}<span>${t('place.cancel')}</span>`);
     onTap(cancel, () => this.endPlacing());
@@ -85,15 +101,37 @@ export class AppUi {
       if (id) this.place(id);
       return;
     }
+    if (this.editor.isOpen) {
+      this.editor.tap(x, y);
+      return;
+    }
     const ci = this.ctx.view.pickCart(x, y);
+    if (ci < 0) {
+      const pi = this.ctx.view.pickProperty(x, y);
+      if (pi >= 0 && (this.ctx.sim.shops.property(pi) || this.ctx.sim.state.quest >= RENT_FROM)) {
+        this.openProperty(pi);
+        return;
+      }
+    }
     if (ci >= 0) {
+      this.propertyPanel.close();
       this.panel.open(ci);
       const c = this.ctx.sim.state.carts[ci];
       if (c) {
         const s = this.ctx.sim.spotOf(c);
         this.ctx.view.camera.focus(s.x + s.fx * 2, s.z + s.fz * 2);
       }
-    } else if (this.panel.isOpen) this.panel.close();
+    } else {
+      if (this.panel.isOpen) this.panel.close();
+      if (this.propertyPanel.isOpen) this.propertyPanel.close();
+    }
+  }
+
+  openProperty(pi: number): void {
+    this.panel.close();
+    this.propertyPanel.open(pi);
+    const g = this.ctx.sim.shops.grid(pi);
+    if (g) this.ctx.view.camera.focus(g.door.x + g.door.nx * 4, g.door.z + g.door.nz * 4);
   }
 
   /** Badge tap: cook right away if possible, otherwise open the panel to show why not. */
@@ -126,6 +164,8 @@ export class AppUi {
 
   private startPlacing(): void {
     const sim = this.ctx.sim;
+    if (this.editor.isOpen) this.editor.exit();
+    this.propertyPanel.close();
     const cost = sim.nextCartCost();
     if (cost === null) return;
     if (sim.state.cash < cost) {
@@ -231,6 +271,20 @@ export class AppUi {
         this.ctx.save();
         break;
       }
+      case 'propertyAcquired':
+        this.toasts.show(`${icon('key')}<span>${t(e.owned ? 'toast.bought' : 'toast.rented')}</span>`, 'good', 3200);
+        break;
+      case 'shopSale': {
+        const g = sim.shops.grid(e.property);
+        if (g && (this.ctx.view.cutaway === e.property || this.ctx.view.camera.dist < 60)) this.labels.popup(g.door.x + g.door.nx * 0.8, TOP + 2.4, g.door.z + g.door.nz * 0.8, `+${formatPrice(e.amount)}`, 'cash');
+        this.ctx.sfx.play('coin');
+        break;
+      }
+      case 'tenant':
+        this.toasts.show(`${icon('people')}<span>${t('toast.tenant')}</span>`, 'good', 3200);
+        this.ctx.sfx.play('quest');
+        this.ctx.save();
+        break;
       case 'workerLevel': {
         const w = sim.workerById(e.worker);
         const ci = w ? sim.cartIndexOfWorker(w) : -1;
@@ -253,6 +307,8 @@ export class AppUi {
     this.tutorial.minigameOpen = this.minigame.isOpen || this.settingsPanel.isOpen || this.hireModal.isOpen || this.kitchenModal.isOpen || this.offlineModal.isOpen || this.dailyModal.isOpen;
     this.hud.update(dt);
     this.panel.update(false, dt);
+    this.propertyPanel.update(false, dt);
+    this.editor.update(dt);
     this.labels.update(dt);
     this.tutorial.update(dt);
   }

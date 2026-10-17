@@ -5,6 +5,10 @@ export enum PedState {
   ToCart = 2,
   Queue = 3,
   Leave = 4,
+  /** Walking to a shop door. */
+  ToShop = 5,
+  /** Inside a shop (see sim/shops.ts ShopPhase). */
+  InShop = 6,
 }
 
 export enum Mood {
@@ -52,6 +56,15 @@ export interface Ped {
   look: number;
   /** Bumped every time the record is reused, so the view can detect respawns. */
   gen: number;
+  /** Shop customer data. */
+  shop: number;
+  phase: number;
+  waypoints: number[];
+  stops: number[];
+  cell: number;
+  waitT: number;
+  basket: number;
+  items: number;
 }
 
 export function makePed(idx: number): Ped {
@@ -85,5 +98,13 @@ export function makePed(idx: number): Ped {
     leaving: false,
     look: 0,
     gen: 0,
+    shop: -1,
+    phase: 0,
+    waypoints: [],
+    stops: [],
+    cell: 0,
+    waitT: 0,
+    basket: 0,
+    items: 0,
   };
 }

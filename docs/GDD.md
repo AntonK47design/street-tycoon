@@ -66,5 +66,10 @@ minigame variant (Phase 2: 3 kitchens total).
 - Offline earnings (8 h cap, 60 %), "While you were away" popup with an optional 2× rewarded ad.
 - Daily reward (7-day streak) + 3 daily tasks.
 
+## Phase 3 — Real estate & shops
+- Rent or buy ground-floor shop spaces; Snack / Flower / Gift shops with products, wholesale restock, prices.
+- Room editor in a cut-away view; layout rating (checkout & queue, paths, variety, displays, decor, space) drives sales.
+- Cashiers (worker role) with their own automation stages; owned buildings rent out upper floors to tenants.
+
 ## Next
-Real estate & shops (3); production (4); market (5); logistics (6).
+Land & production (4); market (5); logistics (6).

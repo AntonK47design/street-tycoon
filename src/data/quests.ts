@@ -16,7 +16,12 @@ export type StatKey =
   | 'longTrainings'
   | 'kitchens'
   | 'dailyTasks'
-  | 'workerCooks';
+  | 'workerCooks'
+  | 'properties'
+  | 'shopSales'
+  | 'bestLayout'
+  | 'owned'
+  | 'tenants';
 
 export interface QuestDef {
   id: string;
@@ -27,7 +32,7 @@ export interface QuestDef {
   absolute: boolean;
   reward: number;
   /** UI element the goal bar can point at (tutorial highlight). */
-  focus?: 'cart' | 'cook' | 'upgrades' | 'price' | 'newCart' | 'clean' | 'restock' | 'hire' | 'train' | 'daily';
+  focus?: 'cart' | 'cook' | 'upgrades' | 'price' | 'newCart' | 'clean' | 'restock' | 'hire' | 'train' | 'daily' | 'rent' | 'layout' | 'buy';
 }
 
 /** Main goal chain (always one visible). Never reorder or remove ids without a save migration (core/save.ts). */
@@ -40,20 +45,30 @@ export const QUESTS: readonly QuestDef[] = [
   { id: 'q_hire', stat: 'workers', target: 1, absolute: true, reward: 40, focus: 'hire' },
   { id: 'q_workerCooks', stat: 'workerCooks', target: 5, absolute: true, reward: 30 },
   { id: 'q_train', stat: 'trainings', target: 1, absolute: true, reward: 60, focus: 'train' },
-  { id: 'q_kitchen', stat: 'kitchens', target: 2, absolute: true, reward: 80, focus: 'newCart' },
+  { id: 'q_rent', stat: 'properties', target: 1, absolute: true, reward: 80, focus: 'rent' },
+  { id: 'q_shopSales', stat: 'shopSales', target: 15, absolute: true, reward: 60 },
+  { id: 'q_layout', stat: 'bestLayout', target: 70, absolute: true, reward: 100, focus: 'layout' },
   { id: 'q_longTrain', stat: 'longTrainings', target: 1, absolute: true, reward: 150, focus: 'train' },
+  { id: 'q_kitchen', stat: 'kitchens', target: 2, absolute: true, reward: 80, focus: 'newCart' },
   { id: 'q_serve150', stat: 'served', target: 150, absolute: true, reward: 100 },
   { id: 'q_hire2', stat: 'workers', target: 2, absolute: true, reward: 120, focus: 'hire' },
   { id: 'q_appeal4', stat: 'bestAppeal', target: 4, absolute: true, reward: 60 },
   { id: 'q_up5', stat: 'maxUpgradeLevel', target: 5, absolute: true, reward: 120 },
+  { id: 'q_shop2', stat: 'properties', target: 2, absolute: true, reward: 250, focus: 'rent' },
   { id: 'q_cart4', stat: 'carts', target: 4, absolute: true, reward: 300, focus: 'newCart' },
   { id: 'q_kitchen3', stat: 'kitchens', target: 3, absolute: true, reward: 250, focus: 'newCart' },
   { id: 'q_earn5k', stat: 'earned', target: 5000, absolute: true, reward: 400 },
+  { id: 'q_buy', stat: 'owned', target: 1, absolute: true, reward: 500, focus: 'buy' },
+  { id: 'q_tenant', stat: 'tenants', target: 1, absolute: true, reward: 400 },
   { id: 'q_hire4', stat: 'workers', target: 4, absolute: true, reward: 500, focus: 'hire' },
   { id: 'q_serve1000', stat: 'served', target: 1000, absolute: true, reward: 800 },
   { id: 'q_cart6', stat: 'carts', target: 6, absolute: true, reward: 1500, focus: 'newCart' },
+  { id: 'q_tenants4', stat: 'tenants', target: 4, absolute: true, reward: 1500 },
   { id: 'q_earn50k', stat: 'earned', target: 50000, absolute: true, reward: 3000 },
 ];
+
+/** Quest chain of save version 2 (Phase 2) — used to migrate the saved quest index. */
+export const QUESTS_V2: readonly string[] = ['q_cook', 'q_serve3', 'q_upgrade', 'q_price', 'q_cart2', 'q_hire', 'q_workerCooks', 'q_train', 'q_kitchen', 'q_longTrain', 'q_serve150', 'q_hire2', 'q_appeal4', 'q_up5', 'q_cart4', 'q_kitchen3', 'q_earn5k', 'q_hire4', 'q_serve1000', 'q_cart6', 'q_earn50k'];
 
 /** Quest chain of save version 1 (Phase 1) — used to migrate the saved quest index. */
 export const QUESTS_V1: readonly string[] = ['q_cook', 'q_serve3', 'q_upgrade', 'q_price', 'q_cart2', 'q_serve40', 'q_appeal4', 'q_up5', 'q_cart3', 'q_earn2k', 'q_serve300', 'q_cart4', 'q_earn10k', 'q_cart5', 'q_serve1500'];
@@ -68,6 +83,7 @@ export const DAILY_TASKS: readonly QuestDef[] = [
   { id: 'd_cooks', stat: 'cooks', target: 15, absolute: false, reward: 60 },
   { id: 'd_restock', stat: 'restocks', target: 3, absolute: false, reward: 50 },
   { id: 'd_workerCooks', stat: 'workerCooks', target: 20, absolute: false, reward: 80 },
+  { id: 'd_shopSales', stat: 'shopSales', target: 30, absolute: false, reward: 80 },
 ];
 
 /** Side goals: two visible at a time, drawn from this pool in order, progress counted from activation. */

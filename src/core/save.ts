@@ -1,13 +1,15 @@
 import { BALANCE } from '../data/balance';
 import { KITCHENS } from '../data/kitchens';
-import { DAILY_TASKS, QUESTS, QUESTS_V1, SIDE_GOALS } from '../data/quests';
+import { DAILY_TASKS, QUESTS, QUESTS_V1, QUESTS_V2, SIDE_GOALS } from '../data/quests';
+import { FURNITURE, SHOP_KINDS, productById, type FurnitureId, type ShopKind } from '../data/shops';
 import { WORKERS } from '../data/workers';
 import { UPGRADES, UPGRADE_ORDER } from '../data/upgrades';
-import { emptyStats, emptyUpgrades, newGameState, type CartState, type DailyState, type GameState, type WorkerState } from '../sim/state';
+import { emptyStats, emptyUpgrades, newGameState, type CartState, type DailyState, type GameState, type PropertyState, type WorkerState } from '../sim/state';
+import type { Placed } from '../sim/shop-layout';
 
 export const SAVE_KEY = 'save';
 export const SAVE_BACKUP_KEY = 'save_backup';
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 export type QualitySetting = 'auto' | 'low' | 'medium' | 'high';
 
@@ -60,6 +62,17 @@ export const MIGRATIONS: Record<number, Migration> = {
       game.quest = idx >= 0 ? idx : Math.min(game.quest, QUESTS.findIndex((q) => q.id === 'q_hire'));
     }
     return { ...raw, v: 2 };
+  },
+  // 2 → 3: Phase 3 inserted shop goals after "train a cook". Players past that point continue with "rent a shop".
+  2: (raw) => {
+    const game = raw.game;
+    if (isObj(game) && typeof game.quest === 'number') {
+      const oldId = QUESTS_V2[game.quest];
+      const idx = oldId ? QUESTS.findIndex((q) => q.id === oldId) : -1;
+      const rent = QUESTS.findIndex((q) => q.id === 'q_rent');
+      game.quest = idx < 0 ? rent : idx > rent ? rent : idx;
+    }
+    return { ...raw, v: 3 };
   },
 };
 
@@ -139,7 +152,19 @@ export function normalizeGame(raw: unknown): GameState {
     hires: 0,
     worldTime: num(raw.worldTime, num(raw.time, 0, 0), 0),
     daily: normalizeDaily(raw.daily),
+    properties: [],
   };
+  if (Array.isArray(raw.properties)) {
+    const seen = new Set<number>();
+    for (const r of raw.properties) {
+      const p = normalizeProperty(r);
+      if (p && !seen.has(p.id)) {
+        seen.add(p.id);
+        g.properties.push(p);
+      }
+    }
+  }
+  g.stats.properties = g.properties.length;
   const cartIds = new Set(g.carts.map((c) => c.id));
   const used = new Set<number>();
   if (Array.isArray(raw.workers)) {
@@ -171,9 +196,42 @@ function normalizeWorker(raw: unknown, cartIds: Set<number>): WorkerState | null
     level: Math.floor(num(raw.level, 1, 1, WORKERS.maxLevel)),
     xp: num(raw.xp, 0, 0),
     cart: cartIds.has(cart) ? cart : -1,
+    shop: Math.floor(num(raw.shop, -1, -1, 99)),
     auto: stage(raw.auto),
     training: tr,
   };
+}
+
+function normalizePlaced(raw: unknown): Placed | null {
+  if (!isObj(raw) || typeof raw.type !== 'string' || !(raw.type in FURNITURE)) return null;
+  const type = raw.type as FurnitureId;
+  const p: Placed = { type, i: Math.floor(num(raw.i, 0, 0, 60)), j: Math.floor(num(raw.j, 0, 0, 60)), rot: Math.floor(num(raw.rot, 0, 0, 3)) as 0 | 1 | 2 | 3 };
+  if (FURNITURE[type].slot) {
+    p.product = typeof raw.product === 'string' && productById(raw.product) ? raw.product : undefined;
+    p.stock = Math.floor(num(raw.stock, 0, 0, FURNITURE[type].capacity ?? 0));
+  }
+  return p;
+}
+
+function normalizeProperty(raw: unknown): PropertyState | null {
+  if (!isObj(raw) || !isNum(raw.id)) return null;
+  const p: PropertyState = { id: Math.floor(raw.id), status: raw.status === 'owned' ? 'owned' : 'rented', shop: null, apartments: [] };
+  const sh = raw.shop;
+  if (isObj(sh) && typeof sh.kind === 'string' && (SHOP_KINDS as readonly string[]).includes(sh.kind)) {
+    const prices: Record<string, number> = {};
+    if (isObj(sh.prices)) for (const [k, v] of Object.entries(sh.prices)) if (isNum(v) && productById(k)) prices[k] = Math.max(0.5, v);
+    p.shop = {
+      kind: sh.kind as ShopKind,
+      items: Array.isArray(sh.items) ? sh.items.map(normalizePlaced).filter((x): x is Placed => x !== null).slice(0, 80) : [],
+      prices,
+      sold: Math.floor(num(sh.sold, 0, 0)),
+      earned: num(sh.earned, 0, 0),
+    };
+  }
+  if (Array.isArray(raw.apartments))
+    for (const a of raw.apartments.slice(0, 8))
+      p.apartments.push(isObj(a) && (a.status === 'renovating' || a.status === 'rented') ? { status: a.status, endsAt: num(a.endsAt, 0, 0) } : { status: 'empty', endsAt: 0 });
+  return p;
 }
 
 function normalizeDaily(raw: unknown): DailyState {

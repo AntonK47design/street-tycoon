@@ -16,9 +16,9 @@ export const PACING: readonly MilestoneTarget[] = [
   { id: 'secondCart', target: 120, min: 85, max: 170, phase: 1 },
   { id: 'firstWorker', target: 240, min: 180, max: 320, phase: 2 },
   { id: 'firstAutomation', target: 420, min: 330, max: 540, phase: 2 },
-  { id: 'firstShop', target: 660, min: 540, max: 800, phase: 3 },
+  { id: 'firstShop', target: 660, min: 510, max: 820, phase: 3 },
   { id: 'tomorrowPayoff', target: 900, min: 720, max: 1100, phase: 2 },
 ];
 
 /** The phase the current build implements (pacing sim skips later milestones). */
-export const CURRENT_PHASE = 2;
+export const CURRENT_PHASE = 3;

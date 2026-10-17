@@ -4,6 +4,8 @@ import { Rng } from '../core/rng';
 import { batchSize, fairPrice, roundPrice } from './cart';
 import type { AutoStage } from '../data/workers';
 import { trainingInfo } from './workers';
+import { FURNITURE } from '../data/shops';
+import { autoPlace } from './shop-layout';
 import { DT, type Sim } from './sim';
 import type { Quality } from './state';
 
@@ -128,7 +130,10 @@ export class Bot {
       sim.startTraining(trainee.id);
       return;
     }
-    const reserve = savingForCart ? (cartCost as number) : q?.focus === 'hire' && cand ? cand.cost : q?.focus === 'train' && tInfo ? tInfo.cost : 0;
+    // shops
+    if (this.shopChores(q?.focus)) return;
+    const rentTarget = q?.focus === 'rent' ? Math.min(...sim.city.properties.map((_, i) => sim.shops.info(i)?.rentPerDay ?? Infinity)) + 120 : 0;
+    const reserve = savingForCart ? (cartCost as number) : q?.focus === 'hire' && cand ? cand.cost : q?.focus === 'train' && tInfo ? tInfo.cost : rentTarget;
     for (const id of this.profile.priority) {
       for (let ci = 0; ci < st.carts.length; ci++) {
         const c = st.carts[ci];
@@ -142,6 +147,56 @@ export class Bot {
     }
     // later carts once the chain asks for them or money piles up
     if (cartCost !== null && st.cash > cartCost * 1.5) this.buyCart();
+  }
+
+  /** Rent / furnish / restock / buy shops. Returns true if it acted. */
+  private shopChores(focus: string | undefined): boolean {
+    const sim = this.sim;
+    const st = sim.state;
+    const shops = sim.shops;
+    for (const p of st.properties) {
+      if (!p.shop) continue;
+      const w = shops.cashierOf(p.id);
+      if ((!w || w.auto < 2) && shops.stockFraction(p.id) < 0.4 && shops.restockCost(p.id) > 0 && st.cash > shops.restockCost(p.id) * 0.5) {
+        shops.restock(p.id);
+        return true;
+      }
+    }
+    if (focus === 'rent') {
+      const free = sim.city.properties.map((_, i) => i).filter((i) => !shops.property(i));
+      const pick = free.sort((a, b) => (shops.info(b)?.traffic ?? 0) - (shops.info(a)?.traffic ?? 0))[0];
+      const inf = pick !== undefined ? shops.info(pick) : null;
+      if (inf && pick !== undefined && st.cash >= inf.rentPerDay + 120) {
+        shops.acquire(pick, st.properties.length % 2 ? 'gift' : 'snack', false);
+        shops.restock(pick);
+        return true;
+      }
+      return false;
+    }
+    if (focus === 'layout') {
+      const p = st.properties[0];
+      const g = p ? shops.grid(p.id) : null;
+      if (p?.shop && g) {
+        for (const t of ['display', 'fridge', 'plant', 'lamp', 'shelf', 'rug'] as const) {
+          if (st.cash < FURNITURE[t].cost + 20) continue;
+          const spot = autoPlace(g, p.shop.items, t);
+          if (spot && shops.place(p.id, spot)) {
+            shops.restock(p.id);
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+    if (focus === 'buy') {
+      const p = st.properties.find((x) => x.status === 'rented');
+      const inf = p ? shops.info(p.id) : null;
+      if (p && inf && st.cash >= inf.buyPrice) {
+        shops.buyOut(p.id);
+        return true;
+      }
+    }
+    return false;
   }
 
   /** New cart: newest unlocked kitchen we don't run yet, on the busiest spot without a same-kitchen rival. */

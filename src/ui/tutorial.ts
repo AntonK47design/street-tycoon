@@ -1,5 +1,7 @@
 import { t } from '../core/i18n';
 import { QUESTS } from '../data/quests';
+import type { PropertyPanel } from './property-panel';
+import type { RoomEditor } from './editor';
 import { batchSize } from '../sim/cart';
 import type { ScreenPoint } from '../render/view';
 import type { CartPanel } from './cart-panel';
@@ -33,6 +35,7 @@ export class Tutorial {
   private time = 0;
   placing = false;
   minigameOpen = false;
+  shop: { panel: PropertyPanel; editor: RoomEditor } | null = null;
 
   constructor(
     private readonly ctx: UiContext,
@@ -128,6 +131,32 @@ export class Tutorial {
         if (this.panel.cartIndex !== ci) return { id: 'train1', text: t('tut.trainOpen'), target: this.cartTarget(Math.max(0, ci)) };
         if (this.panel.currentTab !== 'overview') return { id: 'train2', text: t('tut.priceTab'), target: { el: this.panel.overviewTab } };
         return { id: 'train3', text: t('tut.train'), target: { el: this.panel.staff.trainBtn } };
+      }
+      case 'q_rent': {
+        const sh = this.shop;
+        if (!sh) return null;
+        const free = sim.city.properties.map((_, i) => i).filter((i) => !sim.shops.property(i));
+        const cheapest = Math.min(...free.map((i) => sim.shops.info(i)?.rentPerDay ?? Infinity));
+        if (st.cash < cheapest) return null;
+        if (sh.panel.isOpen && sh.panel.rentBtn) return { id: 'rent2', text: t('tut.rentPick'), target: { el: sh.panel.rentBtn } };
+        const best = free.sort((a, b) => (sim.shops.info(b)?.traffic ?? 0) - (sim.shops.info(a)?.traffic ?? 0))[0];
+        const el = best !== undefined ? this.labels.propertyEl(best) : undefined;
+        return { id: 'rent1', text: t('tut.rent'), target: el && !el.classList.contains('hidden') ? { el } : null };
+      }
+      case 'q_shopSales':
+        return this.shop?.editor.isOpen ? { id: 'shop1', text: t('tut.shopEditor'), target: { el: this.shop.editor.doneBtn } } : { id: 'shop2', text: t('tut.shopSells'), target: null };
+      case 'q_layout': {
+        const sh = this.shop;
+        if (!sh) return null;
+        if (sh.editor.isOpen) {
+          if (sh.editor.modeKind !== 'idle') return { id: 'lay3', text: t('tut.layoutPlace'), target: null };
+          const b = sh.editor.catalogButtons.get(st.cash >= 75 ? 'display' : 'plant');
+          return { id: 'lay2', text: t('tut.layout'), target: b ? { el: b } : null };
+        }
+        if (sh.panel.isOpen && sh.panel.editBtn) return { id: 'lay1', text: t('tut.layoutOpen'), target: { el: sh.panel.editBtn } };
+        const own = st.properties[0];
+        const el = own ? this.labels.propertyEl(own.id) : undefined;
+        return { id: 'lay0', text: t('tut.layoutOpen'), target: el && !el.classList.contains('hidden') ? { el } : null };
       }
       default:
         return null;

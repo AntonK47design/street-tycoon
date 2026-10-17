@@ -4,6 +4,8 @@ import type { MilestoneId } from '../data/pacing';
 import type { StatKey } from '../data/quests';
 import { UPGRADE_ORDER, type UpgradeId } from '../data/upgrades';
 import type { AutoStage } from '../data/workers';
+import type { ShopKind } from '../data/shops';
+import type { Placed } from './shop-layout';
 
 export type Quality = 0 | 1 | 2;
 
@@ -32,9 +34,34 @@ export interface WorkerState {
   xp: number;
   /** Id of the cart the worker runs (-1 = none). */
   cart: number;
+  /** Property id of the shop the worker runs as cashier (-1 = none). */
+  shop: number;
   auto: AutoStage;
   /** Running training: target stage and the world time it finishes. */
   training: { stage: AutoStage; endsAt: number } | null;
+}
+
+export interface ShopState {
+  kind: ShopKind;
+  items: Placed[];
+  /** Price per product id. */
+  prices: Record<string, number>;
+  sold: number;
+  earned: number;
+}
+
+export interface ApartmentState {
+  /** 'empty' → renovating (until endsAt) → 'rented'. */
+  status: 'empty' | 'renovating' | 'rented';
+  endsAt: number;
+}
+
+export interface PropertyState {
+  /** Property id (index into the city's property list). */
+  id: number;
+  status: 'rented' | 'owned';
+  shop: ShopState | null;
+  apartments: ApartmentState[];
 }
 
 export interface DailyTaskState {
@@ -82,6 +109,7 @@ export interface GameState {
   /** Seconds of world time: play time plus credited offline time (timers run on this). */
   worldTime: number;
   daily: DailyState;
+  properties: PropertyState[];
 }
 
 export function emptyUpgrades(): Record<UpgradeId, number> {
@@ -109,6 +137,11 @@ export function emptyStats(): Record<StatKey, number> {
     kitchens: 1,
     dailyTasks: 0,
     workerCooks: 0,
+    properties: 0,
+    shopSales: 0,
+    bestLayout: 0,
+    owned: 0,
+    tenants: 0,
   };
 }
 
@@ -152,5 +185,6 @@ export function newGameState(seed: number = BALANCE.start.seed, firstSpot = 's_0
     hires: 0,
     worldTime: 0,
     daily: { date: '', streak: 0, lastClaim: '', tasks: [] },
+    properties: [],
   };
 }

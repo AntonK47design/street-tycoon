@@ -10,6 +10,7 @@ import { generateCity, type CartSpot, type CityLayout, type PathNode } from './c
 import { appeal, batchSize, fairPrice, ingredientCost, patienceSec, priceMax, priceMin, priceMult, reach, restockCost, roundPrice, serveSec, stockCap, suppliesCap, type AppealParts } from './cart';
 import { Mood, PedState, makePed, type Ped } from './peds';
 import { newCart, newGameState, type CartState, type GameState, type Quality, type WorkerState } from './state';
+import { ShopSystem } from './shops';
 import { addXp, candidates, trainingInfo, workerCookSec, workerQuality, workerWage, type Candidate } from './workers';
 
 export const DT = 1 / BALANCE.SIM_HZ;
@@ -23,6 +24,10 @@ export type SimEvent =
   | { type: 'trainingStarted'; worker: number; stage: AutoStage }
   | { type: 'trained'; worker: number; stage: AutoStage }
   | { type: 'workerLevel'; worker: number; level: number }
+  | { type: 'propertyAcquired'; property: number; owned: boolean }
+  | { type: 'shopSale'; property: number; amount: number; items: number }
+  | { type: 'renovating'; property: number; floor: number }
+  | { type: 'tenant'; property: number; floor: number }
   | { type: 'angry'; cart: number }
   | { type: 'upgrade'; cart: number; id: UpgradeId; level: number }
   | { type: 'cartBought'; cart: number }
@@ -66,7 +71,9 @@ export class Sim {
   readonly peds: Ped[] = [];
   readonly runtime: CartRuntime[] = [];
   readonly spotById = new Map<string, CartSpot>();
-  private readonly rng: Rng;
+  /** @internal shared seeded RNG (shop system uses it too). */
+  readonly rng: Rng;
+  readonly shops: ShopSystem;
   private readonly borderNodes: PathNode[];
   private targetPop: number;
   private spawnAcc = 0;
@@ -90,6 +97,7 @@ export class Sim {
     for (let i = 0; i < cap; i++) this.peds.push(makePed(i));
     this.incomeBuckets = new Array<number>(BALANCE.incomeWindowSec).fill(0);
     for (let i = 0; i < state.carts.length; i++) this.runtime.push(this.makeRuntime());
+    this.shops = new ShopSystem(this);
     this.populate();
     if (state.time === 0) this.sendFirstCustomers();
   }
@@ -336,18 +344,26 @@ export class Sim {
 
   /** Hires candidate k for cart ci. Returns the worker id, or -1. */
   hire(k: number, ci: number): number {
+    const c = this.state.carts[ci];
+    if (!c || this.workerOf(ci)) return -1;
+    return this.hireFor(k, ci, -1);
+  }
+
+  /** @internal hire for a cart (ci ≥ 0) or as cashier for a shop (pi ≥ 0). */
+  hireFor(k: number, ci: number, pi: number): number {
     const cand = this.candidates()[k];
     const c = this.state.carts[ci];
-    if (!cand || !c || this.workerOf(ci) || this.state.cash < cand.cost) return -1;
+    if (!cand || this.state.cash < cand.cost || (ci < 0 && pi < 0)) return -1;
     this.state.cash -= cand.cost;
-    const w: WorkerState = { id: this.state.nextWorkerId++, name: cand.name, stars: cand.stars, level: 1, xp: 0, cart: c.id, auto: 1, training: null };
+    const w: WorkerState = { id: this.state.nextWorkerId++, name: cand.name, stars: cand.stars, level: 1, xp: 0, cart: c ? c.id : -1, shop: pi, auto: 1, training: null };
     this.state.workers.push(w);
     this.state.hires++;
     this.state.stats.workers = this.state.workers.length;
-    const rt = this.runtime[ci] as CartRuntime;
-    rt.reactT = WORKERS.reactSec;
+    const rt = this.runtime[ci];
+    if (rt) rt.reactT = WORKERS.reactSec;
     this.milestone('firstWorker');
     this.events.emit({ type: 'hired', cart: ci, worker: w.id });
+    if (pi >= 0) this.shops.rerate(pi);
     return w.id;
   }
 
@@ -437,6 +453,7 @@ export class Sim {
       const w = this.workerOf(ci);
       if (w) this.tickWorker(ci, w);
     }
+    this.shops.tick();
     this.tickPeds();
     this.spawn();
     this.tickIncome();
@@ -498,8 +515,7 @@ export class Sim {
     const tip = this.rng.chance(tipChance) ? Math.max(0.5, roundPrice(c.price * CU.tipFraction)) : 0;
     const amount = c.price + tip;
     this.state.cash += amount;
-    const k = this.incomeSec % this.incomeBuckets.length;
-    this.incomeBuckets[k] = (this.incomeBuckets[k] ?? 0) + amount;
+    this.addIncome(amount);
     c.earned += amount;
     c.served++;
     c.clean = Math.max(0, c.clean - BALANCE.cart.dirtPerSale);
@@ -546,6 +562,12 @@ export class Sim {
     }
   }
 
+  /** @internal counts towards "income per minute". */
+  addIncome(amount: number): void {
+    const k = this.incomeSec % this.incomeBuckets.length;
+    this.incomeBuckets[k] = (this.incomeBuckets[k] ?? 0) + amount;
+  }
+
   private tickIncome(): void {
     // one bucket per simulated second
     const sec = Math.floor(this.sessionTime);
@@ -555,11 +577,13 @@ export class Sim {
     }
   }
 
-  private bump(k: StatKey, n = 1): void {
+  /** @internal */
+  bump(k: StatKey, n = 1): void {
     this.state.stats[k] += n;
   }
 
-  private milestone(id: MilestoneId): void {
+  /** @internal */
+  milestone(id: MilestoneId): void {
     if (this.state.milestones[id] !== undefined) return;
     const t = Math.round(this.state.time * 10) / 10;
     this.state.milestones[id] = t;
@@ -608,7 +632,8 @@ export class Sim {
     return n;
   }
 
-  private freePed(): Ped | null {
+  /** @internal */
+  freePed(): Ped | null {
     for (const p of this.peds) if (p.state === PedState.Off) return p;
     return null;
   }
@@ -638,7 +663,8 @@ export class Sim {
     p.heading = Math.atan2(dx, dz);
   }
 
-  private initPed(p: Ped): void {
+  /** @internal */
+  initPed(p: Ped): void {
     p.state = PedState.Walk;
     p.speed = this.rng.range(PD.speedMin, PD.speedMax);
     p.lane = this.rng.range(-PD.laneSpread, PD.laneSpread) * 0.6;
@@ -652,6 +678,11 @@ export class Sim {
     p.stride = p.pstride = this.rng.range(0, 10);
     p.moving = 1;
     p.gen++;
+    p.shop = -1;
+    p.waypoints = [];
+    p.stops = [];
+    p.basket = 0;
+    p.items = 0;
   }
 
   private populate(): void {
@@ -764,42 +795,73 @@ export class Sim {
   private recruit(ci: number): void {
     const c = this.state.carts[ci] as CartState;
     const s = this.spotOf(c);
-    const r = reach(c);
+    const p = this.recruitPed(s.sx, s.sz, reach(c));
+    if (!p) return;
+    this.joinQueue(p, ci);
+  }
+
+  /**
+   * @internal Finds a customer for a point: the nearest walking pedestrian within r, or someone stepping
+   * out of a nearby door (fading in). The ped is returned in Walk state; the caller assigns the task.
+   */
+  recruitPed(x: number, z: number, r: number): Ped | null {
     let best: Ped | null = null;
     let bd = r * r;
     for (const p of this.peds) {
       if (p.state !== PedState.Walk || p.leaving || p.fade < 1 || p.checked === 0xffff) continue;
-      const dx = p.x - s.sx;
-      const dz = p.z - s.sz;
+      const dx = p.x - x;
+      const dz = p.z - z;
       const d = dx * dx + dz * dz;
       if (d < bd) {
         bd = d;
         best = p;
       }
     }
-    if (!best) {
-      // nobody close: someone steps out of a nearby door
-      const p = this.freePed();
-      if (!p) return;
-      let door = null as null | { x: number; z: number; nx: number; nz: number };
-      let dd = Infinity;
-      for (const d of this.city.doors) {
-        const v = Math.hypot(d.x - s.sx, d.z - s.sz) + this.rng.range(0, 8);
-        if (v < dd) {
-          dd = v;
-          door = d;
-        }
+    if (best) return best;
+    const p = this.freePed();
+    if (!p) return null;
+    let door = null as null | { x: number; z: number; nx: number; nz: number };
+    let dd = Infinity;
+    for (const d of this.city.doors) {
+      const v = Math.hypot(d.x - x, d.z - z) + this.rng.range(0, 8);
+      if (v > 2.5 && v < dd) {
+        dd = v;
+        door = d;
       }
-      if (!door) return;
-      this.initPed(p);
-      this.place(p, s.a, s.b, 0);
-      p.x = p.px = door.x + door.nx * 0.4;
-      p.z = p.pz = door.z + door.nz * 0.4;
-      p.heading = p.pheading = Math.atan2(door.nx, door.nz);
-      p.fade = 0;
-      best = p;
     }
-    this.joinQueue(best, ci);
+    if (!door) return null;
+    this.initPed(p);
+    const node = this.nearestNode(door.x, door.z);
+    this.place(p, node.id, node.nb[0] as number, 0);
+    p.x = p.px = door.x + door.nx * 0.4;
+    p.z = p.pz = door.z + door.nz * 0.4;
+    p.heading = p.pheading = Math.atan2(door.nx, door.nz);
+    p.fade = 0;
+    return p;
+  }
+
+  private nearestNode(x: number, z: number): PathNode {
+    let best = this.city.nodes[0] as PathNode;
+    let bd = Infinity;
+    for (const n of this.city.nodes) {
+      const d = (n.x - x) * (n.x - x) + (n.z - z) * (n.z - z);
+      if (d < bd) {
+        bd = d;
+        best = n;
+      }
+    }
+    return best;
+  }
+
+  /** @internal A ped that finished an errand walks back onto the sidewalk graph. */
+  rejoin(p: Ped, node: PathNode): void {
+    const keepX = p.x;
+    const keepZ = p.z;
+    this.place(p, node.id, this.rng.pick(node.nb), 0, false);
+    p.x = keepX;
+    p.z = keepZ;
+    p.state = PedState.Leave;
+    p.checked = 0xffff;
   }
 
   private tickPeds(): void {
@@ -869,6 +931,10 @@ export class Sim {
           }
           break;
         }
+        case PedState.ToShop:
+        case PedState.InShop:
+          this.shops.tickPed(p);
+          break;
         case PedState.Leave: {
           // walk back to the path line, then continue along the edge
           const na = nodes[p.a] as PathNode;

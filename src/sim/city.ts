@@ -91,6 +91,8 @@ export interface CityLayout {
   spots: CartSpot[];
   crosswalks: Crosswalk[];
   doors: Door[];
+  /** Rentable ground floors: building index + foot-traffic rating. */
+  properties: Array<{ building: number; traffic: number }>;
   /** Trees and props as data so the renderer and sim agree. */
   trees: Array<{ x: number; z: number; s: number }>;
   fountain: { x: number; z: number; r: number };
@@ -140,7 +142,8 @@ export function generateCity(seed: number): CityLayout {
   const { nodes, crosswalks } = genPaths(blocks);
   const spots = genSpots(blocks, nodes);
   const doors = genDoors(buildings);
-  return { seed, blocks, buildings, nodes, spots, crosswalks, doors, trees, fountain: { x: 0, z: 0, r: 4.2 } };
+  const properties = genProperties(buildings);
+  return { seed, blocks, buildings, nodes, spots, crosswalks, doors, properties, trees, fountain: { x: 0, z: 0, r: 4.2 } };
 }
 
 /** Point on side s (0 N, 1 E, 2 S, 3 W) of a block, t along the side (-HALF..HALF), d = inset from block centre. */
@@ -394,4 +397,22 @@ function genDoors(buildings: Building[]): Door[] {
     }
   }
   return doors;
+}
+
+/** Rentable ground floors: shop buildings of the start district, closest to the square first, one per block. */
+function genProperties(buildings: Building[]): Array<{ building: number; traffic: number }> {
+  const cand = buildings
+    .map((b, i) => ({ b, i, d: Math.hypot((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2) }))
+    .filter((c) => c.b.ring === 0 && c.b.shop && c.b.floors >= 2 && c.b.x1 - c.b.x0 >= 7 && c.b.z1 - c.b.z0 >= 7)
+    .sort((a, b) => a.d - b.d);
+  const out: Array<{ building: number; traffic: number }> = [];
+  const usedBlocks = new Set<string>();
+  for (const c of cand) {
+    const key = `${Math.round(((c.b.x0 + c.b.x1) / 2) / PITCH)},${Math.round(((c.b.z0 + c.b.z1) / 2) / PITCH)}`;
+    if (usedBlocks.has(key)) continue;
+    usedBlocks.add(key);
+    out.push({ building: c.i, traffic: Math.max(0.55, Math.min(1, 1.25 - c.d / 90)) });
+    if (out.length >= 6) break;
+  }
+  return out;
 }

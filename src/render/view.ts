@@ -29,6 +29,9 @@ import { Crowd, lookFromSeed, type PersonLook } from './crowd';
 import { Fx } from './fx';
 import { TycoonCamera } from './camera';
 import { Traffic } from './traffic';
+import { PropertyView } from './property-view';
+import type { Placed } from '../sim/shop-layout';
+import { Plane, Raycaster, Vector2 } from 'three';
 import { PAL } from './palette';
 import { TIERS, dprFor, type Tier } from './quality';
 import type { Post } from './post';
@@ -55,6 +58,8 @@ export class GameView {
   private city: CityMeshes;
   private readonly crowd: Crowd;
   private readonly vendors: Crowd;
+  readonly properties: PropertyView[] = [];
+  private cutawayId = -1;
   private readonly traffic: Traffic;
   private readonly carts: CartView[] = [];
   private readonly lookGen: number[] = [];
@@ -106,8 +111,16 @@ export class GameView {
     this.scene.add(this.makeSky());
 
     this.camera = new TycoonCamera(1);
-    this.city = buildCity(sim.city, this.cityMat);
+    this.city = buildCity(sim.city, this.cityMat, new Set(sim.city.properties.map((p) => p.building)));
     this.scene.add(this.city.group);
+    sim.city.properties.forEach((pr, pi) => {
+      const b = sim.city.buildings[pr.building];
+      const g = sim.shops.grid(pi);
+      if (!b || !g) return;
+      const pv = new PropertyView(pi, b, g, this.cityMat);
+      this.properties.push(pv);
+      this.scene.add(pv.group);
+    });
     this.crowd = new Crowd(sim.peds.length);
     this.scene.add(this.crowd.mesh);
     this.vendors = new Crowd(16, true);
@@ -355,6 +368,7 @@ export class GameView {
     this.updateLighting();
     this.updateCrowd(alpha, dt);
     this.updateCarts(dt);
+    this.updateProperties();
     this.traffic.update(dt, this.sim.peds);
     this.fx.fountain(this.sim.city.fountain.x, TOP + 2.9, this.sim.city.fountain.z, dt);
     this.fx.update(dt);
@@ -427,6 +441,76 @@ export class GameView {
   }
 
   private readonly vendorKey: number[] = [];
+
+  private updateProperties(): void {
+    for (const pv of this.properties) {
+      const p = this.sim.shops.property(pv.id);
+      pv.updateShell(p);
+      if (pv.cutaway && p?.shop) {
+        const rt = this.sim.shops.runtime.get(pv.id);
+        pv.updateFurniture(p.shop.items, `${rt?.version ?? 0}|${rt?.stockVersion ?? 0}|${p.shop.items.length}`);
+      }
+    }
+  }
+
+  /** Cut-away view of one property (−1 = none); `editing` shows the grid. */
+  setCutaway(pi: number, editing = false): void {
+    this.cutawayId = pi;
+    for (const pv of this.properties) pv.setCutaway(pv.id === pi, editing);
+    this.updateProperties();
+  }
+
+  get cutaway(): number {
+    return this.cutawayId;
+  }
+
+  showGhost(pi: number, it: Placed | null, ok: boolean): void {
+    this.properties.find((p) => p.id === pi)?.showGhost(it, ok);
+  }
+
+  private readonly ray = new Raycaster();
+  private readonly ndc = new Vector2();
+  private readonly ground = new Plane(new Vector3(0, 1, 0), -TOP);
+  private readonly hit = new Vector3();
+
+  /** Ground point under a screen position. */
+  groundAt(px: number, py: number): { x: number; z: number } | null {
+    this.ndc.set((px / this.width) * 2 - 1, -(py / this.height) * 2 + 1);
+    this.ray.setFromCamera(this.ndc, this.camera.cam);
+    return this.ray.ray.intersectPlane(this.ground, this.hit) ? { x: this.hit.x, z: this.hit.z } : null;
+  }
+
+  /** Grid cell of property pi under a screen position (may be outside the grid). */
+  cellAt(pi: number, px: number, py: number): { i: number; j: number } | null {
+    const pv = this.properties.find((p) => p.id === pi);
+    const gp = this.groundAt(px, py);
+    if (!pv || !gp) return null;
+    const g = pv.grid;
+    return { i: Math.floor((gp.x - g.x0) / g.cw), j: Math.floor((gp.z - g.z0) / g.ch) };
+  }
+
+  /** Property whose footprint is under a screen position. */
+  pickProperty(px: number, py: number): number {
+    const gp = this.groundAt(px, py);
+    if (!gp) return -1;
+    for (const pv of this.properties) {
+      const b = pv.building;
+      if (gp.x >= b.x0 - 1.5 && gp.x <= b.x1 + 1.5 && gp.z >= b.z0 - 1.5 && gp.z <= b.z1 + 1.5) return pv.id;
+    }
+    // the facade above the ground point: test the projected top of each building
+    let best = -1;
+    let bd = 70;
+    for (const pv of this.properties) {
+      const b = pv.building;
+      const p = this.project((b.x0 + b.x1) / 2, TOP + 3, (b.z0 + b.z1) / 2, this.sp);
+      const d = Math.hypot(p.x - px, p.y - py);
+      if (d < bd) {
+        bd = d;
+        best = pv.id;
+      }
+    }
+    return best;
+  }
 
   stats(): { calls: number; triangles: number; geometries: number; textures: number } {
     const i = this.renderer.info;

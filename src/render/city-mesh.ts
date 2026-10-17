@@ -74,7 +74,7 @@ export function buildingHeight(b: Building): number {
   return TOP + (b.shop ? SHOP_H : FH) + (b.floors - 1) * FH;
 }
 
-function addBuilding(g: GeoBuilder, b: Building, lod: number): void {
+export function addBuilding(g: GeoBuilder, b: Building, lod: number): void {
   const rng = new Rng(b.seed);
   const wall = PAL.walls[b.wall % PAL.walls.length] as number;
   const accent = PAL.accents[b.accent % PAL.accents.length] as number;
@@ -415,7 +415,8 @@ export interface CityMeshes {
 }
 
 /** Builds the static city: one mesh per block (frustum culled), plus roads and markings. */
-export function buildCity(layout: CityLayout, material: Material): CityMeshes {
+/** Builds the static city. Buildings in `skip` (rentable properties) are rendered by PropertyView instead. */
+export function buildCity(layout: CityLayout, material: Material, skip: ReadonlySet<number> = new Set()): CityMeshes {
   const group = new Group();
   group.name = 'city';
   const chunks: Mesh[] = [];
@@ -455,7 +456,9 @@ export function buildCity(layout: CityLayout, material: Material): CityMeshes {
     if (b.kind === 'plaza') addPlaza(g, b, layout, rng);
     else if (b.kind === 'park') addPark(g, b);
     if (b.ring <= 1) addStreetProps(g, b, rng, layout);
-    for (const bd of layout.buildings) {
+    for (let bi = 0; bi < layout.buildings.length; bi++) {
+      const bd = layout.buildings[bi] as Building;
+      if (skip.has(bi)) continue;
       const cx = (bd.x0 + bd.x1) / 2;
       const cz = (bd.z0 + bd.z1) / 2;
       if (Math.abs(cx - b.cx) < HALF && Math.abs(cz - b.cz) < HALF) addBuilding(g, bd, lod);

@@ -51,6 +51,14 @@ export class TycoonCamera {
     this.velZ = vz;
   }
 
+  /** Turns the camera to look from direction (dx, dz) towards the target (shortest way round). */
+  lookFrom(dx: number, dz: number): void {
+    let want = Math.atan2(dx, dz);
+    while (want - this.goalYaw > Math.PI) want -= Math.PI * 2;
+    while (want - this.goalYaw < -Math.PI) want += Math.PI * 2;
+    this.goalYaw = want;
+  }
+
   rotate(d: number): void {
     this.goalYaw += d;
   }

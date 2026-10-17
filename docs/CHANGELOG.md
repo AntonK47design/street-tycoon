@@ -1,5 +1,15 @@
 # Changelog
 
+## Phase 3 — Real estate & shops
+
+- **6 rentable shop spaces** in the start district, each marked with a "For rent" sign and label in the world. Rent is paid continuously per game day. Buying costs 28 days of rent and ends the rent.
+- **Shops**: Snack, Flower or Gift shop with 4–5 products each, a wholesale restock and per-product prices. Customers walk in through the door, browse 1–3 shelves, queue at the checkout and pay. Self-checkout is slow; a hired **cashier** is fast, and their training stages are: fills shelves → sets prices → keeps it tidy → faster.
+- **Room editor** with a cut-away view (upper floors and walls hidden, low dollhouse walls) and a 1 m grid. It has 8 furniture types (shelf, fridge, display, checkout, plant, lamp, rug, bench). You can place, rotate, move, change the product or sell, with a green/red ghost preview. Placement can't block the entrance or another piece's access spot.
+- **Layout rating** (0–100 %) built from checkout and queue space, reachable paths, product variety, display density, decor and free space. It drives how many people come in. Without a reachable checkout and a stocked shelf, the shop is closed.
+- **Owned buildings**: renovate the upper floors (real-time timer) and tenants move in and pay rent per game day, also while you're away.
+- Offline earnings now include shops (from stock, or restocked by a trained cashier), rent and tenants.
+- Goal chain extended: rent a shop, sell 15 items, reach a 70 % layout, second shop, buy a building, first and fourth tenant. Save format v3 with migration.
+
 ## Phase 2 — Workers & retention (first Basic Launch candidate)
 
 - **Cooks**: hire one per cart from 3 candidates (1–3★, wage per portion only while producing). They cook on their own, gain XP and level up (faster, better dishes).

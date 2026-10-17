@@ -148,6 +148,7 @@ describe('save v1 → v2', () => {
     expect(m.v).toBe(SAVE_VERSION);
     expect(QUESTS[(m.game as { quest: number }).quest]?.id).toBe('q_hire');
     const v1b = { v: 1, game: { quest: 6, carts: [{ spot: 's_0_0_s' }] } }; // q_appeal4 still exists
-    expect(QUESTS[parseBlob(JSON.stringify(v1b))!.game.quest]?.id).toBe('q_appeal4');
+    // q_appeal4 still exists, but v3 inserted the shop goals before it: continue with "rent a shop"
+    expect(QUESTS[parseBlob(JSON.stringify(v1b))!.game.quest]?.id).toBe('q_rent');
   });
 });

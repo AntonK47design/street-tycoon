@@ -14,3 +14,8 @@
 - **Offline is analytic**: min(demand, cook capacity, serve capacity) × 60 % × time, capped at 8 h. Without stage-2 training, supplies run out. Carts without a cook only sell their stock. This rewards hiring and training, the systems that make the game play itself.
 - **Daily reward/tasks use the local calendar date** (the sim stays pure: the app passes `YYYY-MM-DD`). Missing a day resets the streak. The daily button only appears after the second cart, so the first minutes stay focused.
 - **Pages deploy** from every push of the default branch; the CrazyGames SDK falls back to the mock (localStorage) there.
+- **Rentable spaces are fixed** (6 ground floors of shop buildings near the square). Those buildings are rendered separately from the merged block meshes so they can be cut away. Merging rooms across buildings is postponed.
+- **Cut-away = dollhouse**: in the editor the whole exterior is hidden and replaced by an interior floor with 1.15 m walls and a door gap. Furniture is only rendered in cut-away mode (the shell hides it otherwise).
+- **Floors**: the ground floor is the shop (editor). Upper floors of an owned building are apartments, managed as a list in the panel's Building tab rather than with an editor.
+- **Rent is continuous** (cash never goes below 0, no eviction) to avoid a soft-lock. Shops are tuned to clear rent with the starter layout (~+$20/min) and to roughly double with a good layout.
+- **Shop demand** = base × √(area/90) × traffic × (0.3 + 0.9 × layout rating) × price factor. Customers are pedestrians recruited from the street, like cart customers.
