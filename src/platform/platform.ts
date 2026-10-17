@@ -9,6 +9,9 @@ export interface PlatformLogEntry {
   msg: string;
 }
 
+/** The CrazyGames SDK throttles gameplayStart/Stop calls closer than 1 s apart. */
+const GAMEPLAY_MIN_GAP_MS = 1100;
+
 const ADS_FLAG = (import.meta.env?.VITE_ADS ?? 'off') === 'on';
 
 /**
@@ -55,18 +58,39 @@ export class Platform {
     this.adapter.loadingStop();
   }
 
+  /** Desired state; the SDK sees it at most once per GAMEPLAY_MIN_GAP_MS (it throttles faster toggles). */
+  private wanted = false;
+  private lastSent = -Infinity;
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+
   gameplayStart(): void {
-    if (this.gameplay) return;
-    this.gameplay = true;
-    this.record('gameplayStart');
-    this.adapter.gameplayStart();
+    this.wanted = true;
+    this.flush();
   }
 
   gameplayStop(): void {
-    if (!this.gameplay) return;
-    this.gameplay = false;
-    this.record('gameplayStop');
-    this.adapter.gameplayStop();
+    this.wanted = false;
+    this.flush();
+  }
+
+  /** Sends the desired gameplay state, coalescing quick stop/start pairs (popup → next popup). */
+  private flush(): void {
+    if (this.wanted === this.gameplay) return;
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const wait = this.lastSent + GAMEPLAY_MIN_GAP_MS - now;
+    if (wait > 0) {
+      if (!this.flushTimer)
+        this.flushTimer = setTimeout(() => {
+          this.flushTimer = null;
+          this.flush();
+        }, wait);
+      return;
+    }
+    this.lastSent = now;
+    this.gameplay = this.wanted;
+    this.record(this.gameplay ? 'gameplayStart' : 'gameplayStop');
+    if (this.gameplay) this.adapter.gameplayStart();
+    else this.adapter.gameplayStop();
   }
 
   happytime(): void {

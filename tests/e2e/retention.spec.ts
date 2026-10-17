@@ -34,8 +34,10 @@ test('returning after 2 h: offline earnings popup, then daily reward', async ({ 
   await expect(page.locator('.offline-modal')).toBeVisible();
   await expect(page.locator('.offline-big')).toContainText('+$');
   // blocking: the platform got gameplayStop for the popup
-  const log = await page.evaluate(() => ((window as unknown as { __st: { platform: { log: Array<{ msg: string }> } } }).__st.platform.log.map((l) => l.msg)));
-  expect(log).toContain('gameplayStop');
+  // (the platform layer spaces SDK calls ≥ 1 s apart, so the stop may arrive a moment later)
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __st: { platform: { log: Array<{ msg: string }> } } }).__st.platform.log.map((l) => l.msg)))
+    .toContain('gameplayStop');
   await page.screenshot({ path: `screenshots/offline-${info.project.name}.png` });
   await page.locator('.offline-modal .btn.primary').click();
   await expect(page.locator('.daily-modal')).toBeVisible();
