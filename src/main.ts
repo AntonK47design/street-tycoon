@@ -125,7 +125,7 @@ async function boot(): Promise<void> {
     const showDaily = (): void => {
       if (sim.state.quest >= 4 && (canClaimDailyReward(sim.state, today()) || dailyUnlocked(sim.state))) ui.dailyModal.open();
     };
-    if (r.seconds >= RETENTION.offlineMinSec && (r.earned > 0 || r.trained > 0 || sim.state.workers.length > 0)) {
+    if (r.seconds >= RETENTION.offlineMinSec && (r.earned > 0 || r.trained > 0 || r.produced > 0 || sim.state.workers.length > 0)) {
       ui.offlineModal.onClose = () => {
         ui.offlineModal.onClose = () => {};
         if (newDay) showDaily();

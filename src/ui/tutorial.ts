@@ -2,6 +2,8 @@ import { t } from '../core/i18n';
 import { QUESTS } from '../data/quests';
 import type { PropertyPanel } from './property-panel';
 import type { RoomEditor } from './editor';
+import type { LandPanel } from './land-panel';
+import { LAND } from '../data/production';
 import { batchSize } from '../sim/cart';
 import type { ScreenPoint } from '../render/view';
 import type { CartPanel } from './cart-panel';
@@ -36,6 +38,7 @@ export class Tutorial {
   placing = false;
   minigameOpen = false;
   shop: { panel: PropertyPanel; editor: RoomEditor } | null = null;
+  land: LandPanel | null = null;
 
   constructor(
     private readonly ctx: UiContext,
@@ -79,9 +82,51 @@ export class Tutorial {
     return el && !el.classList.contains('hidden') ? { el } : null;
   }
 
+  /** Short guide for the Outskirts — shown even after the main tutorial unless it was skipped. */
+  private landHint(): Hint | null {
+    const sim = this.ctx.sim;
+    const st = sim.state;
+    const q = sim.currentQuest();
+    const lp = this.land;
+    if (!q || !lp || this.flags.tutorialSkipped) return null;
+    const hud = this.hud.landBtn;
+    const travel = !hud.classList.contains('hidden') && !lp.isOpen ? { el: hud } : null;
+    switch (q.id) {
+      case 'q_land':
+        if (st.cash < LAND.unlockCost) return null;
+        if (lp.unlockBtn && lp.isOpen) return { id: 'land2', text: t('tut.landUnlock'), target: { el: lp.unlockBtn } };
+        return { id: 'land1', text: t('tut.land'), target: travel };
+      case 'q_parcel': {
+        if (st.cash < sim.production.parcelPrice()) return null;
+        if (lp.isOpen && lp.buyBtn) return { id: 'parcel2', text: t('tut.parcelBuy'), target: { el: lp.buyBtn } };
+        const el = this.labels.parcelEl(0);
+        return { id: 'parcel1', text: t('tut.parcel'), target: el && !el.classList.contains('hidden') ? { el } : travel };
+      }
+      case 'q_farm': {
+        if (lp.isOpen && lp.firstBuildCard) return { id: 'farm2', text: t('tut.farmBuild'), target: { el: lp.firstBuildCard } };
+        const own = st.land.parcels[0];
+        const el = own ? this.labels.parcelEl(own.id) : undefined;
+        return { id: 'farm1', text: t('tut.farm'), target: el && !el.classList.contains('hidden') ? { el } : travel };
+      }
+      case 'q_produce': {
+        if (lp.isOpen && lp.startBtn && !lp.startBtn.classList.contains('hidden') && !lp.startBtn.disabled) return { id: 'prod2', text: t('tut.produceStart'), target: { el: lp.startBtn } };
+        return null;
+      }
+      case 'q_sellGoods': {
+        const b = this.hud.storageBtn;
+        if (sim.production.stored() < 20 || b.classList.contains('hidden')) return null;
+        return { id: 'sell', text: t('tut.sellGoods'), target: { el: b } };
+      }
+      default:
+        return null;
+    }
+  }
+
   private current(): Hint | null {
     const sim = this.ctx.sim;
     const st = sim.state;
+    const lh = this.landHint();
+    if (lh) return lh;
     if (!this.active) return null;
     const q = sim.currentQuest();
     if (!q || st.quest >= TUTORIAL_END) {

@@ -45,6 +45,8 @@ export const ICON = {
   sign: svg('<rect x="3" y="4" width="18" height="11" rx="2" fill="currentColor"/><path d="M8 15v6M16 15v6" stroke="currentColor" stroke-width="2"/><path d="M7 9.5h10" stroke="#ffe08a" stroke-width="2.2" stroke-linecap="round"/>'),
   comfort: svg('<path d="M3 11a9 7 0 0 1 18 0z" fill="currentColor"/><path d="M12 11v9M9 20h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'),
   pantry: svg('<rect x="3.5" y="7" width="17" height="13" rx="2" fill="currentColor"/><rect x="2.5" y="4.5" width="19" height="4" rx="1.4" fill="currentColor" opacity=".75"/><path d="M9 12.5h6" stroke="#fff8ea" stroke-width="2" stroke-linecap="round"/>'),
+  field: svg('<path d="M2 20l4-9h12l4 9z" fill="currentColor" opacity=".55"/><path d="M5 20l2.6-9M9.5 20l1-9M14.5 20l-1-9M19 20l-2.6-9" stroke="currentColor" stroke-width="1.6"/><path d="M12 9.5V4.5M12 6c-1.6-1.8-3.4-1.4-3.6-.4 1 .9 2.3 1 3.6.4zM12 6c1.6-1.8 3.4-1.4 3.6-.4-1 .9-2.3 1-3.6.4z" stroke="currentColor" stroke-width="1.6" fill="currentColor" stroke-linecap="round"/>'),
+  build: svg('<path d="M3 21h18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M5 21v-9l7-5 7 5v9" fill="currentColor" opacity=".8"/><path d="M14.5 4.5l5 5-2 2-5-5z" fill="currentColor"/><path d="M13 13.5h-2v7.5h2z" fill="#fff8ea" opacity=".8"/>'),
   chart: svg('<path d="M4 20V10M10 20V4M16 20v-7M21 20H3" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>'),
 } as const;
 

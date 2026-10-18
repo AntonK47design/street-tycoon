@@ -21,6 +21,8 @@ export interface OfflineReport {
   /** Net rent (+ tenants, − rented shops). */
   rent: number;
   tenants: number;
+  /** Goods made by facilities while away. */
+  produced: number;
 }
 
 /** Average hunger over the game day (offline has no rush hours). */
@@ -45,13 +47,18 @@ function averageHunger(): number {
 export function applyOffline(sim: Sim, awaySec: number): OfflineReport {
   const st = sim.state;
   const seconds = Math.max(0, Math.min(RETENTION.offlineCapSec, awaySec));
-  const report: OfflineReport = { seconds, away: Math.max(0, awaySec), earned: 0, served: 0, trained: 0, shops: 0, rent: 0, tenants: 0 };
+  const report: OfflineReport = { seconds, away: Math.max(0, awaySec), earned: 0, served: 0, trained: 0, shops: 0, rent: 0, tenants: 0, produced: 0 };
   // trainings run on real time, uncapped up to a day
   const before = st.workers.filter((w) => w.training).length;
   st.worldTime += Math.max(0, Math.min(awaySec, 24 * 3600));
   sim.tickTraining();
   report.trained = before - st.workers.filter((w) => w.training).length;
   report.tenants = sim.shops.settleRenovations();
+  // facilities finish (and, with a worker, chain) their batches up to the new world time
+  sim.production.takeProduced();
+  sim.production.advance();
+  sim.production.recover(Math.min(awaySec, 24 * 3600));
+  report.produced = sim.production.takeProduced();
   if (seconds <= 0) return report;
   const shop = sim.shops.creditOffline(seconds, RETENTION.offlineEfficiency);
   report.shops = Math.round(shop.earned * 100) / 100;

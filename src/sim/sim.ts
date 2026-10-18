@@ -11,6 +11,8 @@ import { appeal, batchSize, fairPrice, ingredientCost, patienceSec, priceMax, pr
 import { Mood, PedState, makePed, type Ped } from './peds';
 import { newCart, newGameState, type CartState, type GameState, type Quality, type WorkerState } from './state';
 import { ShopSystem } from './shops';
+import { ProductionSystem } from './production';
+import type { GoodId } from '../data/production';
 import { addXp, candidates, trainingInfo, workerCookSec, workerQuality, workerWage, type Candidate } from './workers';
 
 export const DT = 1 / BALANCE.SIM_HZ;
@@ -28,6 +30,11 @@ export type SimEvent =
   | { type: 'shopSale'; property: number; amount: number; items: number }
   | { type: 'renovating'; property: number; floor: number }
   | { type: 'tenant'; property: number; floor: number }
+  | { type: 'landUnlocked' }
+  | { type: 'facilityBuilt'; parcel: number; kind: string }
+  | { type: 'produced'; parcel: number; amount: number; good: GoodId }
+  | { type: 'goodsSold'; good: string; qty: number; amount: number }
+  | { type: 'storageFull' }
   | { type: 'angry'; cart: number }
   | { type: 'upgrade'; cart: number; id: UpgradeId; level: number }
   | { type: 'cartBought'; cart: number }
@@ -74,6 +81,7 @@ export class Sim {
   /** @internal shared seeded RNG (shop system uses it too). */
   readonly rng: Rng;
   readonly shops: ShopSystem;
+  readonly production: ProductionSystem;
   private readonly borderNodes: PathNode[];
   private targetPop: number;
   private spawnAcc = 0;
@@ -98,6 +106,7 @@ export class Sim {
     this.incomeBuckets = new Array<number>(BALANCE.incomeWindowSec).fill(0);
     for (let i = 0; i < state.carts.length; i++) this.runtime.push(this.makeRuntime());
     this.shops = new ShopSystem(this);
+    this.production = new ProductionSystem(this);
     this.populate();
     if (state.time === 0) this.sendFirstCustomers();
   }
@@ -350,12 +359,12 @@ export class Sim {
   }
 
   /** @internal hire for a cart (ci ≥ 0) or as cashier for a shop (pi ≥ 0). */
-  hireFor(k: number, ci: number, pi: number): number {
+  hireFor(k: number, ci: number, pi: number, fac = -1): number {
     const cand = this.candidates()[k];
     const c = this.state.carts[ci];
-    if (!cand || this.state.cash < cand.cost || (ci < 0 && pi < 0)) return -1;
+    if (!cand || this.state.cash < cand.cost || (ci < 0 && pi < 0 && fac < 0)) return -1;
     this.state.cash -= cand.cost;
-    const w: WorkerState = { id: this.state.nextWorkerId++, name: cand.name, stars: cand.stars, level: 1, xp: 0, cart: c ? c.id : -1, shop: pi, auto: 1, training: null };
+    const w: WorkerState = { id: this.state.nextWorkerId++, name: cand.name, stars: cand.stars, level: 1, xp: 0, cart: c ? c.id : -1, shop: pi, facility: fac, auto: 1, training: null };
     this.state.workers.push(w);
     this.state.hires++;
     this.state.stats.workers = this.state.workers.length;
@@ -454,6 +463,7 @@ export class Sim {
       if (w) this.tickWorker(ci, w);
     }
     this.shops.tick();
+    this.production.tick();
     this.tickPeds();
     this.spawn();
     this.tickIncome();
@@ -598,6 +608,7 @@ export class Sim {
   private checkQuests(): void {
     const st = this.state;
     st.stats.carts = st.carts.length;
+    st.stats.landUnlocked = st.land.unlocked ? 1 : 0;
     // main chain (several may complete in one tick)
     for (let guard = 0; guard < 4; guard++) {
       const q = QUESTS[st.quest];

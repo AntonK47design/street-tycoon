@@ -1,15 +1,16 @@
 import { BALANCE } from '../data/balance';
 import { KITCHENS } from '../data/kitchens';
-import { DAILY_TASKS, QUESTS, QUESTS_V1, QUESTS_V2, SIDE_GOALS } from '../data/quests';
+import { DAILY_TASKS, QUESTS, QUESTS_V1, QUESTS_V2, QUESTS_V3, SIDE_GOALS } from '../data/quests';
+import { FACILITIES, GOODS, recipeById, type FacilityKind, type GoodId } from '../data/production';
 import { FURNITURE, SHOP_KINDS, productById, type FurnitureId, type ShopKind } from '../data/shops';
 import { WORKERS } from '../data/workers';
 import { UPGRADES, UPGRADE_ORDER } from '../data/upgrades';
-import { emptyStats, emptyUpgrades, newGameState, type CartState, type DailyState, type GameState, type PropertyState, type WorkerState } from '../sim/state';
+import { emptyStats, emptyUpgrades, newGameState, type CartState, type DailyState, type GameState, type FacilityState, type LandState, type PropertyState, type WorkerState } from '../sim/state';
 import type { Placed } from '../sim/shop-layout';
 
 export const SAVE_KEY = 'save';
 export const SAVE_BACKUP_KEY = 'save_backup';
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export type QualitySetting = 'auto' | 'low' | 'medium' | 'high';
 
@@ -73,6 +74,17 @@ export const MIGRATIONS: Record<number, Migration> = {
       game.quest = idx < 0 ? rent : idx > rent ? rent : idx;
     }
     return { ...raw, v: 3 };
+  },
+  // 3 → 4: Phase 4 inserted land & production goals before "buy a building".
+  3: (raw) => {
+    const game = raw.game;
+    if (isObj(game) && typeof game.quest === 'number') {
+      const oldId = QUESTS_V3[game.quest];
+      const idx = oldId ? QUESTS.findIndex((q) => q.id === oldId) : -1;
+      const land = QUESTS.findIndex((q) => q.id === 'q_land');
+      game.quest = idx < 0 ? land : idx > land ? land : idx;
+    }
+    return { ...raw, v: 4 };
   },
 };
 
@@ -153,6 +165,7 @@ export function normalizeGame(raw: unknown): GameState {
     worldTime: num(raw.worldTime, num(raw.time, 0, 0), 0),
     daily: normalizeDaily(raw.daily),
     properties: [],
+    land: normalizeLand(raw.land),
   };
   if (Array.isArray(raw.properties)) {
     const seen = new Set<number>();
@@ -197,6 +210,7 @@ function normalizeWorker(raw: unknown, cartIds: Set<number>): WorkerState | null
     xp: num(raw.xp, 0, 0),
     cart: cartIds.has(cart) ? cart : -1,
     shop: Math.floor(num(raw.shop, -1, -1, 99)),
+    facility: Math.floor(num(raw.facility, -1, -1, 99)),
     auto: stage(raw.auto),
     training: tr,
   };
@@ -232,6 +246,45 @@ function normalizeProperty(raw: unknown): PropertyState | null {
     for (const a of raw.apartments.slice(0, 8))
       p.apartments.push(isObj(a) && (a.status === 'renovating' || a.status === 'rented') ? { status: a.status, endsAt: num(a.endsAt, 0, 0) } : { status: 'empty', endsAt: 0 });
   return p;
+}
+
+function normalizeFacility(raw: unknown): FacilityState | null {
+  if (!isObj(raw) || typeof raw.kind !== 'string' || !(raw.kind in FACILITIES)) return null;
+  const kind = raw.kind as FacilityKind;
+  const recipe = typeof raw.recipe === 'string' && recipeById(raw.recipe)?.facility === kind ? raw.recipe : '';
+  const job = isObj(raw.job) && typeof raw.job.recipe === 'string' && recipeById(raw.job.recipe) && isNum(raw.job.endsAt) ? { recipe: raw.job.recipe, endsAt: raw.job.endsAt } : null;
+  const animal = raw.animal === 'chicken' || raw.animal === 'sheep' || raw.animal === 'cow' ? raw.animal : undefined;
+  return {
+    kind,
+    recipe,
+    job,
+    builtAt: num(raw.builtAt, 0, 0),
+    merged: Math.floor(num(raw.merged, -1, -1, 99)),
+    animals: Math.floor(num(raw.animals, 0, 0, 999)),
+    animal,
+    dug: num(raw.dug, 0, 0),
+    made: num(raw.made, 0, 0),
+    idleSince: isNum(raw.idleSince) ? raw.idleSince : undefined,
+  };
+}
+
+function normalizeLand(raw: unknown): LandState {
+  const l: LandState = { unlocked: false, parcels: [], storage: {}, storageLevel: 0, saturation: {} };
+  if (!isObj(raw)) return l;
+  l.unlocked = raw.unlocked === true;
+  l.storageLevel = Math.floor(num(raw.storageLevel, 0, 0, 50));
+  for (const key of ['storage', 'saturation'] as const) {
+    const src = raw[key];
+    if (isObj(src)) for (const [k, v] of Object.entries(src)) if (k in GOODS && isNum(v) && v > 0) l[key][k as GoodId] = key === 'storage' ? Math.floor(v) : Math.min(1, v);
+  }
+  const seen = new Set<number>();
+  if (Array.isArray(raw.parcels))
+    for (const p of raw.parcels) {
+      if (!isObj(p) || !isNum(p.id) || seen.has(p.id)) continue;
+      seen.add(p.id);
+      l.parcels.push({ id: Math.floor(p.id), facility: normalizeFacility(p.facility), annexOf: Math.floor(num(p.annexOf, -1, -1, 99)) });
+    }
+  return l;
 }
 
 function normalizeDaily(raw: unknown): DailyState {

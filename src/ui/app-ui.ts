@@ -1,7 +1,7 @@
 import { formatCash, formatPrice, t } from '../core/i18n';
 import type { Settings } from '../core/save';
 import type { SimEvent } from '../sim/sim';
-import { CITY } from '../data/city';
+import { CITY, PITCH } from '../data/city';
 import { CartPanel } from './cart-panel';
 import type { UiContext } from './context';
 import { h, haptic, icon, onTap } from './dom';
@@ -15,10 +15,14 @@ import { PropertyPanel } from './property-panel';
 import { RoomEditor } from './editor';
 import { QUESTS } from '../data/quests';
 import { DailyModal, HireModal, KitchenModal, OfflineModal } from './retention-ui';
+import { LandPanel, StorageModal, goodChip } from './land-panel';
+import { FACILITIES } from '../data/production';
 import type { KitchenId } from '../data/kitchens';
 
 const TOP = CITY.curb;
 const RENT_FROM = QUESTS.findIndex((q) => q.id === 'q_rent');
+const LAND_FROM = QUESTS.findIndex((q) => q.id === 'q_land');
+const LAND_X = 2 * PITCH;
 
 /** Composes the overlay and routes input between world, panels and the minigame. */
 export class AppUi {
@@ -39,6 +43,9 @@ export class AppUi {
   readonly dailyModal: DailyModal;
   readonly propertyPanel: PropertyPanel;
   readonly editor: RoomEditor;
+  readonly landPanel: LandPanel;
+  readonly storageModal: StorageModal;
+  private lastCity = { x: 0, z: 6 };
 
   constructor(
     private readonly ctx: UiContext,
@@ -74,6 +81,18 @@ export class AppUi {
     this.editor.onExit = (pi) => this.openProperty(pi);
     this.labels.onProperty = (pi) => this.openProperty(pi);
     this.tutorial.shop = { panel: this.propertyPanel, editor: this.editor };
+    this.landPanel = new LandPanel(ctx);
+    this.storageModal = new StorageModal(ctx);
+    this.landPanel.onHire = (id) => {
+      const f = ctx.sim.production.facilityAt(id);
+      if (f) this.hireModal.openForFacility(f.main.id, FACILITIES[f.f.kind].role);
+    };
+    this.landPanel.onStorage = () => this.storageModal.open();
+    this.labels.onParcel = (id) => this.openParcel(id);
+    this.hud.onStorage = () => this.storageModal.open();
+    this.hud.onLand = () => this.travel();
+    this.hud.atLand = () => this.atLand();
+    this.tutorial.land = this.landPanel;
     this.placeBar = h('div', 'place-bar hidden');
     const cancel = h('button', 'btn', `${icon('close')}<span>${t('place.cancel')}</span>`);
     onTap(cancel, () => this.endPlacing());
@@ -106,6 +125,13 @@ export class AppUi {
       return;
     }
     const ci = this.ctx.view.pickCart(x, y);
+    if (ci < 0 && (this.ctx.sim.state.land.unlocked || this.ctx.sim.state.quest >= LAND_FROM)) {
+      const id = this.ctx.view.pickParcel(x, y);
+      if (id >= 0) {
+        this.openParcel(id);
+        return;
+      }
+    }
     if (ci < 0) {
       const pi = this.ctx.view.pickProperty(x, y);
       if (pi >= 0 && (this.ctx.sim.shops.property(pi) || this.ctx.sim.state.quest >= RENT_FROM)) {
@@ -115,6 +141,7 @@ export class AppUi {
     }
     if (ci >= 0) {
       this.propertyPanel.close();
+      this.landPanel.close();
       this.panel.open(ci);
       const c = this.ctx.sim.state.carts[ci];
       if (c) {
@@ -124,11 +151,46 @@ export class AppUi {
     } else {
       if (this.panel.isOpen) this.panel.close();
       if (this.propertyPanel.isOpen) this.propertyPanel.close();
+      if (this.landPanel.isOpen) this.landPanel.close();
+    }
+  }
+
+  private atLand(): boolean {
+    return this.ctx.view.camera.target.x > 70;
+  }
+
+  /** HUD button: fly to the Outskirts and back. */
+  private travel(): void {
+    const cam = this.ctx.view.camera;
+    if (this.atLand()) {
+      this.landPanel.close();
+      cam.focus(this.lastCity.x, this.lastCity.z, 72);
+    } else {
+      this.lastCity = { x: Math.min(40, cam.target.x), z: cam.target.z };
+      this.panel.close();
+      this.propertyPanel.close();
+      cam.maxX = Math.max(cam.maxX, LAND_X + 28);
+      cam.focus(LAND_X, 0, 96);
+      if (!this.ctx.sim.state.land.unlocked) this.openParcel(this.ctx.sim.city.parcels[Math.floor(this.ctx.sim.city.parcels.length / 2)]?.id ?? 0, false);
+    }
+    this.ctx.sfx.play('open');
+  }
+
+  openParcel(id: number, focus = true): void {
+    if (this.editor.isOpen) this.editor.exit();
+    this.panel.close();
+    this.propertyPanel.close();
+    this.landPanel.open(id);
+    if (focus && this.ctx.sim.state.land.unlocked) {
+      const c = this.ctx.view.land.centre(id);
+      this.ctx.view.camera.maxX = Math.max(this.ctx.view.camera.maxX, LAND_X + 28);
+      this.ctx.view.camera.focus(c.x, c.z + 4);
     }
   }
 
   openProperty(pi: number): void {
     this.panel.close();
+    this.landPanel.close();
     this.propertyPanel.open(pi);
     const g = this.ctx.sim.shops.grid(pi);
     if (g) this.ctx.view.camera.focus(g.door.x + g.door.nx * 4, g.door.z + g.door.nz * 4);
@@ -295,19 +357,42 @@ export class AppUi {
         }
         break;
       }
+      case 'landUnlocked':
+        this.toasts.show(`${icon('field')}<span>${t('toast.landUnlocked')}</span>`, 'good', 3600);
+        this.ctx.view.camera.focus(LAND_X, 0, 96);
+        this.ctx.platform.happytime();
+        break;
+      case 'facilityBuilt': {
+        const c = this.ctx.view.land.centre(e.parcel);
+        this.labels.popup(c.x, TOP + 5, c.z, t('popup.built'), 'info');
+        this.ctx.view.fx.sparkle(c.x, TOP + 1, c.z, 24);
+        this.ctx.sfx.play('quest');
+        break;
+      }
+      case 'produced': {
+        if (!this.atLand()) break;
+        const c = this.ctx.view.land.centre(e.parcel);
+        this.labels.popup(c.x, TOP + 4, c.z, `+${goodChip(e.good, e.amount)}`, 'info');
+        break;
+      }
+      case 'storageFull':
+        this.toasts.show(`${icon('box')}<span>${t('toast.storageFull')}</span>`, 'warn', 3200);
+        break;
       default:
         break;
     }
   }
 
   update(dt: number): void {
-    this.input.enabled = !this.minigame.isOpen && !this.settingsPanel.isOpen && !this.hireModal.isOpen && !this.kitchenModal.isOpen && !this.offlineModal.isOpen && !this.dailyModal.isOpen;
+    this.input.enabled = !this.minigame.isOpen && !this.settingsPanel.isOpen && !this.hireModal.isOpen && !this.kitchenModal.isOpen && !this.offlineModal.isOpen && !this.dailyModal.isOpen && !this.storageModal.isOpen;
     this.input.update(dt);
     this.minigame.update(dt);
-    this.tutorial.minigameOpen = this.minigame.isOpen || this.settingsPanel.isOpen || this.hireModal.isOpen || this.kitchenModal.isOpen || this.offlineModal.isOpen || this.dailyModal.isOpen;
+    this.tutorial.minigameOpen = this.minigame.isOpen || this.settingsPanel.isOpen || this.hireModal.isOpen || this.kitchenModal.isOpen || this.offlineModal.isOpen || this.dailyModal.isOpen || this.storageModal.isOpen;
     this.hud.update(dt);
     this.panel.update(false, dt);
     this.propertyPanel.update(false, dt);
+    this.landPanel.update(false, dt);
+    this.storageModal.update(dt);
     this.editor.update(dt);
     this.labels.update(dt);
     this.tutorial.update(dt);

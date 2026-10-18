@@ -1,5 +1,18 @@
 # Changelog
 
+## Phase 4 — Land & production
+
+- **The Outskirts**: three blocks east of the start district open for $1,200 once the city runs (goal after "earn $5,000"). A HUD button flies the camera between the city and the Outskirts.
+- **12 parcels** to buy (price grows with each one). Each parcel shows a world label: price, facility, worker, and a warning when storage is full or materials are missing.
+- **Raw producers**: farm (wheat, potatoes, tomatoes, cotton — visible rows that grow with the batch), ranch (chickens, sheep or cows that wander in their pen; every batch breeds an animal until the pen is full, then surplus becomes livestock), forest (trees regrow), quarry (a terraced pit that visibly gets deeper; coal from depth 2, ore from depth 4).
+- **Processing**: mill & bakery, sawmill, smelter (with smoke), loom, butcher, workshop (furniture, tools, gadgets) and a recycling yard that takes any crafted good apart into 75 % of its inputs. All recipes are data (`src/data/production.ts`).
+- **Merge** two neighbouring parcels into a large facility (×2.2 output). **Demolish** refunds half the cost.
+- **Workers** for facilities (farmer, miner, craftsman): they start every batch on their own, also offline; training stages raise yield and then speed.
+- **Storage & trading post**: one shared storage with upgrades. Selling pushes the price down (saturation) and it recovers over time. This is the first step towards the Phase 5 market.
+- Offline: facilities keep producing while you're away and the popup shows the goods produced.
+- Goal chain: open the Outskirts, buy a parcel, build a farm, produce, sell goods, craft, 3 facilities, merge, craft 200. New daily tasks: produce, sell goods. The guide points at each step (unless the tutorial was skipped).
+- Save format v4 with migration. New pacing milestone `firstGoods` (~41 min).
+
 ## Phase 3 — Real estate & shops
 
 - **6 rentable shop spaces** in the start district, each marked with a "For rent" sign and label in the world. Rent is paid continuously per game day. Buying costs 28 days of rent and ends the rent.

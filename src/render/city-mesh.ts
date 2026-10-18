@@ -316,8 +316,19 @@ function blockSide(b: Block, s: number, t: number, d: number): [number, number] 
 }
 
 function addBlockGround(g: GeoBuilder, b: Block): void {
-  // sidewalk slab and curb stones
-  g.box(b.cx, TOP / 2, b.cz, CITY.block, TOP, CITY.block, PAL.sidewalk);
+  // sidewalk slab and curb stones (land blocks: only the ring — parcels are drawn by LandView, mines dig down)
+  if (b.kind === 'land') {
+    const sw = CITY.sidewalk;
+    const deep = 12;
+    g.box(b.cx, (TOP - deep) / 2, b.cz - HALF + sw / 2, CITY.block, TOP + deep, sw, PAL.sidewalk);
+    g.box(b.cx, (TOP - deep) / 2, b.cz + HALF - sw / 2, CITY.block, TOP + deep, sw, PAL.sidewalk);
+    g.box(b.cx - HALF + sw / 2, (TOP - deep) / 2, b.cz, sw, TOP + deep, CITY.block - 2 * sw, PAL.sidewalk);
+    g.box(b.cx + HALF - sw / 2, (TOP - deep) / 2, b.cz, sw, TOP + deep, CITY.block - 2 * sw, PAL.sidewalk);
+    // gravel paths between the four parcels
+    const inner = HALF - sw;
+    g.box(b.cx, (TOP - deep) / 2, b.cz, 0.5, TOP + deep, inner * 2, 0xb8a98c);
+    g.box(b.cx, (TOP - deep) / 2, b.cz, inner * 2, TOP + deep, 0.5, 0xb8a98c);
+  } else g.box(b.cx, TOP / 2, b.cz, CITY.block, TOP, CITY.block, PAL.sidewalk);
   const cw = 0.32;
   g.box(b.cx, TOP + 0.003, b.cz - HALF + cw / 2, CITY.block, 0.01, cw, PAL.curb);
   g.box(b.cx, TOP + 0.003, b.cz + HALF - cw / 2, CITY.block, 0.01, cw, PAL.curb);
@@ -426,7 +437,22 @@ export function buildCity(layout: CityLayout, material: Material, skip: Readonly
 
   const roads = new GeoBuilder();
   const ext = (R + 0.5) * PITCH + 120;
-  roads.rect(-ext, -ext, ext, ext, 0, PAL.asphalt);
+  // the road plane leaves holes under the Outskirts parcels (mines dig below street level)
+  const inner = HALF - CITY.sidewalk;
+  const holes = layout.blocks.filter((b) => b.kind === 'land').map((b) => [b.cx - inner, b.cz - inner, b.cx + inner, b.cz + inner] as const);
+  if (holes.length) {
+    const hx0 = Math.min(...holes.map((h) => h[0]));
+    const hx1 = Math.max(...holes.map((h) => h[2]));
+    roads.rect(-ext, -ext, hx0, ext, 0, PAL.asphalt);
+    roads.rect(hx1, -ext, ext, ext, 0, PAL.asphalt);
+    const zs = [...holes].sort((a, b) => a[1] - b[1]);
+    let z = -ext;
+    for (const h of zs) {
+      roads.rect(hx0, z, hx1, h[1], 0, PAL.asphalt);
+      z = h[3];
+    }
+    roads.rect(hx0, z, hx1, ext, 0, PAL.asphalt);
+  } else roads.rect(-ext, -ext, ext, ext, 0, PAL.asphalt);
   // centre dashes (skip intersections)
   for (let i = -R - 1; i <= R; i++) {
     const c = (i + 0.5) * PITCH;

@@ -1,7 +1,10 @@
 import { QUESTS, SIDE_GOALS, type QuestDef } from '../data/quests';
+import { LAND } from '../data/production';
 import { formatCash, formatNumber, t } from '../core/i18n';
 import type { UiContext } from './context';
 import { h, icon, onTap, setHtml, setText, toggle } from './dom';
+
+const LAND_FROM = QUESTS.findIndex((q) => q.id === 'q_land');
 
 /** Top bars: cash, income, goal bar, side goals, clock; bottom-left: new cart. */
 export class Hud {
@@ -25,6 +28,12 @@ export class Hud {
   onDaily: () => void = () => {};
   dailyPending: () => number = () => 0;
   readonly dailyBtn: HTMLButtonElement;
+  readonly storageBtn: HTMLButtonElement;
+  readonly landBtn: HTMLButtonElement;
+  onStorage: () => void = () => {};
+  onLand: () => void = () => {};
+  /** True while the camera looks at the Outskirts (the travel button then points back). */
+  atLand: () => boolean = () => false;
   private readonly dailyBadge: HTMLSpanElement;
 
   constructor(private readonly ctx: UiContext) {
@@ -66,7 +75,12 @@ export class Hud {
     const bl = h('div', 'hud bl');
     this.newCart = h('button', 'btn new-cart', '');
     onTap(this.newCart, () => this.onNewCart());
-    bl.append(this.newCart);
+    this.storageBtn = h('button', 'btn hud-chip storage-btn hidden', '');
+    this.storageBtn.setAttribute('aria-label', t('storage.title'));
+    onTap(this.storageBtn, () => this.onStorage());
+    this.landBtn = h('button', 'btn hud-chip land-btn hidden', '');
+    onTap(this.landBtn, () => this.onLand());
+    bl.append(this.newCart, this.landBtn, this.storageBtn);
 
     ctx.root.append(tl, tc, tr, bl);
     this.shownCash = ctx.sim.state.cash;
@@ -149,6 +163,25 @@ export class Hud {
     setText(this.dailyBadge, String(pend));
     toggle(this.dailyBadge, 'hidden', pend === 0);
     toggle(this.dailyBtn, 'pending', pend > 0);
+    // Outskirts travel + storage
+    const landOpen = st.quest >= LAND_FROM || st.land.unlocked;
+    toggle(this.landBtn, 'hidden', !landOpen);
+    if (landOpen) {
+      const away = this.atLand();
+      const key = `${away}`;
+      if (this.landBtn.dataset.k !== key) {
+        this.landBtn.dataset.k = key;
+        setHtml(this.landBtn, `${icon(away ? 'cart' : 'field')}<span class="lbl">${t(away ? 'hud.toCity' : 'hud.toLand')}</span>`);
+      }
+      toggle(this.landBtn, 'ready', !st.land.unlocked && st.cash >= LAND.unlockCost && !away);
+    }
+    toggle(this.storageBtn, 'hidden', !st.land.unlocked);
+    if (st.land.unlocked) {
+      const used = sim.production.stored();
+      const cap = sim.production.storageCap();
+      setHtml(this.storageBtn, `${icon('box')}<span class="lbl">${formatNumber(used)}<small>/${formatNumber(cap)}</small></span>`);
+      toggle(this.storageBtn, 'warn', used >= cap * 0.9);
+    }
     // new cart button
     const cost = sim.nextCartCost();
     const spots = sim.freeSpots().length;

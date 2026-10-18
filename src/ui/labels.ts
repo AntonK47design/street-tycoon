@@ -1,4 +1,5 @@
 import { CITY } from '../data/city';
+import { LAND } from '../data/production';
 import { QUESTS } from '../data/quests';
 import type { KitchenId } from '../data/kitchens';
 import { formatCash, t } from '../core/i18n';
@@ -12,6 +13,7 @@ import { starsHtml } from './cart-panel';
 
 const TOP = CITY.curb;
 const RENT_FROM = QUESTS.findIndex((q) => q.id === 'q_rent');
+const LAND_FROM = QUESTS.findIndex((q) => q.id === 'q_land');
 const KITCHEN_ICON: Partial<Record<KitchenId, 'hotdog' | 'burger' | 'crepe'>> = { hotdog: 'hotdog', burger: 'burger', crepe: 'crepe' };
 
 interface Badge {
@@ -32,6 +34,9 @@ export class Labels {
   onProperty: (pi: number) => void = () => {};
   private readonly propLabels: Array<{ el: HTMLDivElement; key: string }> = [];
   onMarker: (spot: string) => void = () => {};
+  onParcel: (id: number) => void = () => {};
+  private readonly parcelLabels: Array<{ el: HTMLDivElement; key: string }> = [];
+  private districtLabel: HTMLDivElement | null = null;
 
   constructor(private readonly ctx: UiContext) {
     this.layer = h('div', 'labels');
@@ -85,6 +90,91 @@ export class Labels {
       lab.el.className = `prop-label${p ? ' mine' : ''}`;
       if (!p) lab.el.innerHTML = `${icon('key')}<span>${t('prop.forRentShort', { v: formatCash(sim.shops.info(pi)?.rentPerDay ?? 0) })}</span>`;
       else lab.el.innerHTML = `${icon('shop')}<span>${t(`shop.${p.shop?.kind ?? 'snack'}`)}</span>${low ? `<span class="warn-ic">${icon('box')}</span>` : ''}${closed ? `<span class="warn-ic">${icon('lock')}</span>` : ''}`;
+    });
+  }
+
+  districtEl(): HTMLElement | null {
+    return this.districtLabel;
+  }
+
+  parcelEl(id: number): HTMLElement | undefined {
+    return this.parcelLabels[id]?.el;
+  }
+
+  /** Outskirts: a "for sale" sign over the district while locked, then one status label per parcel. */
+  private updateLand(): void {
+    const { sim, view } = this.ctx;
+    const st = sim.state;
+    const prod = sim.production;
+    const parcels = sim.city.parcels;
+    if (!this.districtLabel) {
+      this.districtLabel = h('div', 'prop-label district');
+      onTap(this.districtLabel, () => this.onParcel(parcels[Math.floor(parcels.length / 2)]?.id ?? 0));
+      this.layer.append(this.districtLabel);
+    }
+    const locked = !st.land.unlocked;
+    const showDistrict = locked && st.quest >= LAND_FROM;
+    toggle(this.districtLabel, 'hidden', !showDistrict);
+    if (showDistrict) {
+      const c = parcels[Math.floor(parcels.length / 2)];
+      const sp = c ? view.project((c.x0 + c.x1) / 2, TOP + 6, (c.z0 + c.z1) / 2, this.sp) : null;
+      toggle(this.districtLabel, 'hidden', !sp?.visible);
+      if (sp?.visible) {
+        this.districtLabel.style.transform = `translate3d(${Math.round(sp.x)}px, ${Math.round(sp.y)}px, 0) translate(-50%, -100%)`;
+        setHtml(this.districtLabel, `${icon('field')}<span>${t('land.districtLabel', { v: formatCash(LAND.unlockCost) })}</span>`);
+      }
+    }
+    while (this.parcelLabels.length < parcels.length) {
+      const id = this.parcelLabels.length;
+      const el = h('div', 'prop-label parcel');
+      onTap(el, () => this.onParcel(id));
+      this.layer.append(el);
+      this.parcelLabels.push({ el, key: '' });
+    }
+    const near = view.camera.dist < 110;
+    parcels.forEach((p, id) => {
+      const lab = this.parcelLabels[id] as { el: HTMLDivElement; key: string };
+      const o = prod.owned(id);
+      if (locked || !near || (o && o.annexOf >= 0)) {
+        toggle(lab.el, 'hidden', true);
+        return;
+      }
+      const at = prod.facilityAt(id);
+      const c = at ? view.land.centre(id) : { x: (p.x0 + p.x1) / 2, z: (p.z0 + p.z1) / 2 };
+      const sp = view.project(c.x, TOP + 4.2, c.z, this.sp);
+      toggle(lab.el, 'hidden', !sp.visible);
+      if (!sp.visible) return;
+      lab.el.style.transform = `translate3d(${Math.round(sp.x)}px, ${Math.round(sp.y)}px, 0) translate(-50%, -100%)`;
+      let key: string;
+      let html: string;
+      let cls = 'prop-label parcel';
+      if (!o) {
+        const v = prod.parcelPrice();
+        key = `sale|${v}`;
+        html = `${icon('tag')}<span>${formatCash(v)}</span>`;
+        cls += ' sale';
+      } else if (!at) {
+        key = 'empty';
+        html = `${icon('build')}<span>${t('land.buildShort')}</span>`;
+        cls += ' mine';
+      } else {
+        const f = at.f;
+        const building = st.worldTime < f.builtAt;
+        const worker = !!prod.workerOf(at.main.id);
+        const idle = !building && !f.job;
+        const blk = idle ? prod.blocker(at.main.id) : null;
+        key = `${f.kind}|${building}|${worker}|${idle}|${blk}|${!!f.full}`;
+        html = `${icon(building ? 'build' : 'field')}<span>${t(`fac.${f.kind}`)}</span>`;
+        if (worker) html += `<span class="staff-ic">${icon('people')}</span>`;
+        if (f.full || blk === 'storage') html += `<span class="warn-ic">${icon('box')}</span>`;
+        else if (blk === 'inputs') html += `<span class="warn-ic">${icon('lock')}</span>`;
+        else if (idle && !worker) html += `<span class="plus">${icon('plus')}</span>`;
+        cls += idle && !worker && blk === null ? ' mine ready' : ' mine';
+      }
+      if (key === lab.key) return;
+      lab.key = key;
+      lab.el.className = cls;
+      lab.el.innerHTML = html;
     });
   }
 
@@ -147,6 +237,7 @@ export class Labels {
     const { sim, view } = this.ctx;
     this.ensureBadges();
     this.updateProperties();
+    this.updateLand();
     const st = sim.state;
     // cart badges
     for (let ci = 0; ci < this.badges.length; ci++) {

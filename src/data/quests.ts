@@ -21,7 +21,14 @@ export type StatKey =
   | 'shopSales'
   | 'bestLayout'
   | 'owned'
-  | 'tenants';
+  | 'tenants'
+  | 'landUnlocked'
+  | 'parcels'
+  | 'facilities'
+  | 'merges'
+  | 'produced'
+  | 'crafted'
+  | 'goodsSold';
 
 export interface QuestDef {
   id: string;
@@ -32,7 +39,7 @@ export interface QuestDef {
   absolute: boolean;
   reward: number;
   /** UI element the goal bar can point at (tutorial highlight). */
-  focus?: 'cart' | 'cook' | 'upgrades' | 'price' | 'newCart' | 'clean' | 'restock' | 'hire' | 'train' | 'daily' | 'rent' | 'layout' | 'buy';
+  focus?: 'cart' | 'cook' | 'upgrades' | 'price' | 'newCart' | 'clean' | 'restock' | 'hire' | 'train' | 'daily' | 'rent' | 'layout' | 'buy' | 'land' | 'parcel' | 'build';
 }
 
 /** Main goal chain (always one visible). Never reorder or remove ids without a save migration (core/save.ts). */
@@ -58,14 +65,26 @@ export const QUESTS: readonly QuestDef[] = [
   { id: 'q_cart4', stat: 'carts', target: 4, absolute: true, reward: 300, focus: 'newCart' },
   { id: 'q_kitchen3', stat: 'kitchens', target: 3, absolute: true, reward: 250, focus: 'newCart' },
   { id: 'q_earn5k', stat: 'earned', target: 5000, absolute: true, reward: 400 },
+  { id: 'q_land', stat: 'landUnlocked', target: 1, absolute: true, reward: 200, focus: 'land' },
+  { id: 'q_parcel', stat: 'parcels', target: 1, absolute: true, reward: 100, focus: 'parcel' },
+  { id: 'q_farm', stat: 'facilities', target: 1, absolute: true, reward: 150, focus: 'build' },
+  { id: 'q_produce', stat: 'produced', target: 30, absolute: true, reward: 150 },
+  { id: 'q_sellGoods', stat: 'goodsSold', target: 150, absolute: true, reward: 200 },
   { id: 'q_buy', stat: 'owned', target: 1, absolute: true, reward: 500, focus: 'buy' },
+  { id: 'q_craft', stat: 'crafted', target: 10, absolute: true, reward: 300, focus: 'build' },
+  { id: 'q_facilities3', stat: 'facilities', target: 3, absolute: true, reward: 400, focus: 'build' },
   { id: 'q_tenant', stat: 'tenants', target: 1, absolute: true, reward: 400 },
   { id: 'q_hire4', stat: 'workers', target: 4, absolute: true, reward: 500, focus: 'hire' },
   { id: 'q_serve1000', stat: 'served', target: 1000, absolute: true, reward: 800 },
   { id: 'q_cart6', stat: 'carts', target: 6, absolute: true, reward: 1500, focus: 'newCart' },
   { id: 'q_tenants4', stat: 'tenants', target: 4, absolute: true, reward: 1500 },
+  { id: 'q_merge', stat: 'merges', target: 1, absolute: true, reward: 800, focus: 'parcel' },
+  { id: 'q_craft200', stat: 'crafted', target: 200, absolute: true, reward: 2000 },
   { id: 'q_earn50k', stat: 'earned', target: 50000, absolute: true, reward: 3000 },
 ];
+
+/** Quest chain of save version 3 (Phase 3) — used to migrate the saved quest index. */
+export const QUESTS_V3: readonly string[] = ['q_cook', 'q_serve3', 'q_upgrade', 'q_price', 'q_cart2', 'q_hire', 'q_workerCooks', 'q_train', 'q_rent', 'q_shopSales', 'q_layout', 'q_longTrain', 'q_kitchen', 'q_serve150', 'q_hire2', 'q_appeal4', 'q_up5', 'q_shop2', 'q_cart4', 'q_kitchen3', 'q_earn5k', 'q_buy', 'q_tenant', 'q_hire4', 'q_serve1000', 'q_cart6', 'q_tenants4', 'q_earn50k'];
 
 /** Quest chain of save version 2 (Phase 2) — used to migrate the saved quest index. */
 export const QUESTS_V2: readonly string[] = ['q_cook', 'q_serve3', 'q_upgrade', 'q_price', 'q_cart2', 'q_hire', 'q_workerCooks', 'q_train', 'q_kitchen', 'q_longTrain', 'q_serve150', 'q_hire2', 'q_appeal4', 'q_up5', 'q_cart4', 'q_kitchen3', 'q_earn5k', 'q_hire4', 'q_serve1000', 'q_cart6', 'q_earn50k'];
@@ -84,6 +103,8 @@ export const DAILY_TASKS: readonly QuestDef[] = [
   { id: 'd_restock', stat: 'restocks', target: 3, absolute: false, reward: 50 },
   { id: 'd_workerCooks', stat: 'workerCooks', target: 20, absolute: false, reward: 80 },
   { id: 'd_shopSales', stat: 'shopSales', target: 30, absolute: false, reward: 80 },
+  { id: 'd_produce', stat: 'produced', target: 150, absolute: false, reward: 90 },
+  { id: 'd_goodsSold', stat: 'goodsSold', target: 400, absolute: false, reward: 90 },
 ];
 
 /** Side goals: two visible at a time, drawn from this pool in order, progress counted from activation. */

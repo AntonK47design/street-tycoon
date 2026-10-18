@@ -71,5 +71,11 @@ minigame variant (Phase 2: 3 kitchens total).
 - Room editor in a cut-away view; layout rating (checkout & queue, paths, variety, displays, decor, space) drives sales.
 - Cashiers (worker role) with their own automation stages; owned buildings rent out upper floors to tenants.
 
+## Phase 4 — Land & production
+- The Outskirts district (unlock $1,200): 12 parcels; farm, ranch, forest and quarry produce raw goods; mill, sawmill, smelter, loom, butcher and workshop process them; the recycler takes crafted goods apart.
+- Every job runs on real time (also offline). Workers start jobs on their own; training raises yield and speed.
+- Merge neighbouring parcels for large facilities. The quarry gets deeper as you dig and unlocks coal and ore.
+- Shared storage (upgradable) and a trading post whose prices drop with each sale and recover over time.
+
 ## Next
-Land & production (4); market (5); logistics (6).
+Market & bank (5); logistics (6).

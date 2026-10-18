@@ -1,5 +1,5 @@
 /** First-session milestone targets (seconds of play). The pacing simulator checks the corridor. */
-export type MilestoneId = 'gameplayStart' | 'firstSale' | 'firstUpgrade' | 'secondCart' | 'firstWorker' | 'firstAutomation' | 'firstShop' | 'tomorrowPayoff';
+export type MilestoneId = 'gameplayStart' | 'firstSale' | 'firstUpgrade' | 'secondCart' | 'firstWorker' | 'firstAutomation' | 'firstShop' | 'tomorrowPayoff' | 'firstGoods';
 
 export interface MilestoneTarget {
   id: MilestoneId;
@@ -18,7 +18,9 @@ export const PACING: readonly MilestoneTarget[] = [
   { id: 'firstAutomation', target: 420, min: 330, max: 540, phase: 2 },
   { id: 'firstShop', target: 660, min: 510, max: 820, phase: 3 },
   { id: 'tomorrowPayoff', target: 900, min: 720, max: 1100, phase: 2 },
+  // second-session goal: the Outskirts open after ~40 min of play (q_earn5k → q_land)
+  { id: 'firstGoods', target: 2460, min: 1800, max: 3300, phase: 4 },
 ];
 
 /** The phase the current build implements (pacing sim skips later milestones). */
-export const CURRENT_PHASE = 3;
+export const CURRENT_PHASE = 4;

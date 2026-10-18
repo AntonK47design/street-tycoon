@@ -5,6 +5,7 @@ import { batchSize, fairPrice, roundPrice } from './cart';
 import type { AutoStage } from '../data/workers';
 import { trainingInfo } from './workers';
 import { FURNITURE } from '../data/shops';
+import { FACILITIES, GOOD_ORDER, LAND, recipeById, type FacilityKind, type GoodId } from '../data/production';
 import { autoPlace } from './shop-layout';
 import { DT, type Sim } from './sim';
 import type { Quality } from './state';
@@ -130,10 +131,12 @@ export class Bot {
       sim.startTraining(trainee.id);
       return;
     }
-    // shops
+    // shops & land
     if (this.shopChores(q?.focus)) return;
+    if (this.landChores(q?.focus)) return;
     const rentTarget = q?.focus === 'rent' ? Math.min(...sim.city.properties.map((_, i) => sim.shops.info(i)?.rentPerDay ?? Infinity)) + 120 : 0;
-    const reserve = savingForCart ? (cartCost as number) : q?.focus === 'hire' && cand ? cand.cost : q?.focus === 'train' && tInfo ? tInfo.cost : rentTarget;
+    const landTarget = q?.focus === 'land' ? LAND.unlockCost : q?.focus === 'parcel' ? sim.production.parcelPrice() : q?.focus === 'build' ? 1200 : q?.focus === 'buy' ? (sim.shops.info(st.properties.find((x) => x.status === 'rented')?.id ?? -1)?.buyPrice ?? 0) : 0;
+    const reserve = savingForCart ? (cartCost as number) : q?.focus === 'hire' && cand ? cand.cost : q?.focus === 'train' && tInfo ? tInfo.cost : Math.max(rentTarget, landTarget);
     for (const id of this.profile.priority) {
       for (let ci = 0; ci < st.carts.length; ci++) {
         const c = st.carts[ci];
@@ -195,6 +198,66 @@ export class Bot {
         shops.buyOut(p.id);
         return true;
       }
+    }
+    return false;
+  }
+
+  /** Outskirts: unlock, buy parcels, build a small chain (farm → mill, forest → sawmill), run and sell. */
+  private landChores(focus: string | undefined): boolean {
+    const sim = this.sim;
+    const st = sim.state;
+    const prod = sim.production;
+    const land = st.land;
+    if (!land.unlocked) {
+      if (focus === 'land' && st.cash >= LAND.unlockCost) return prod.unlock();
+      return false;
+    }
+    // sell when storage fills up or a goal wants sales
+    const used = prod.stored();
+    if (used > prod.storageCap() * 0.6 || (sim.currentQuest()?.stat === 'goodsSold' && used >= 30)) {
+      let bestG: GoodId | null = null;
+      let bestV = 0;
+      for (const g of GOOD_ORDER) {
+        const v = prod.have(g) * prod.price(g);
+        if (v > bestV && !this.neededInput(g)) {
+          bestV = v;
+          bestG = g;
+        }
+      }
+      if (bestG) return prod.sell(bestG, prod.have(bestG)) > 0;
+    }
+    // run idle facilities by hand
+    for (const p of land.parcels) {
+      if (p.facility && prod.blocker(p.id) === null && !prod.workerOf(p.id)) return prod.start(p.id);
+    }
+    // grow: next facility of the plan on a free owned parcel, else buy one
+    const plan: FacilityKind[] = ['farm', 'mill', 'forest', 'sawmill', 'ranch', 'workshop'];
+    const built = land.parcels.filter((p) => p.facility).length;
+    const next = plan[built];
+    const want = focus === 'parcel' || focus === 'build' || built < 2 || st.cash > 3000;
+    if (next && want) {
+      const empty = land.parcels.find((p) => !p.facility && p.annexOf < 0);
+      if (empty) {
+        if (st.cash >= FACILITIES[next].cost + 50) return prod.build(empty.id, next, 'chicken');
+        return false;
+      }
+      const ids = new Set(land.parcels.map((p) => p.id));
+      const free = sim.city.parcels.find((p) => !ids.has(p.id));
+      if (free && st.cash >= prod.parcelPrice() + (focus === 'parcel' ? 0 : FACILITIES[next].cost)) return prod.buyParcel(free.id);
+    }
+    // staff facilities once the city runs itself
+    const cand = sim.candidates()[0];
+    if (cand && st.quest > 24 && st.cash > cand.cost * 3) {
+      const unstaffed = land.parcels.find((p) => p.facility && !prod.workerOf(p.id));
+      if (unstaffed) return prod.hireWorker(0, unstaffed.id) >= 0;
+    }
+    return false;
+  }
+
+  private neededInput(g: GoodId): boolean {
+    for (const p of this.sim.state.land.parcels) {
+      const r = p.facility ? recipeById(p.facility.recipe) : undefined;
+      if (r && (r.inputs[g] ?? 0) > 0 && this.sim.production.have(g) < 200) return true;
     }
     return false;
   }

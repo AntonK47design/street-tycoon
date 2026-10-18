@@ -30,11 +30,15 @@ import { Fx } from './fx';
 import { TycoonCamera } from './camera';
 import { Traffic } from './traffic';
 import { PropertyView } from './property-view';
+import { LandView } from './land-view';
+import { QUESTS } from '../data/quests';
 import type { Placed } from '../sim/shop-layout';
 import { Plane, Raycaster, Vector2 } from 'three';
 import { PAL } from './palette';
 import { TIERS, dprFor, type Tier } from './quality';
 import type { Post } from './post';
+
+const LAND_FROM = QUESTS.findIndex((q) => q.id === 'q_land');
 
 const TOP = CITY.curb;
 const tmpV = new Vector3();
@@ -59,6 +63,7 @@ export class GameView {
   private readonly crowd: Crowd;
   private readonly vendors: Crowd;
   readonly properties: PropertyView[] = [];
+  readonly land: LandView;
   private cutawayId = -1;
   private readonly traffic: Traffic;
   private readonly carts: CartView[] = [];
@@ -130,6 +135,8 @@ export class GameView {
       this.lookScale.push(1);
       this.moving.push(0);
     }
+    this.land = new LandView(sim, this.cityMat);
+    this.scene.add(this.land.group);
     this.fx = new Fx(this.scene);
     this.traffic = new Traffic(24);
     this.scene.add(this.traffic.mesh);
@@ -369,6 +376,11 @@ export class GameView {
     this.updateCrowd(alpha, dt);
     this.updateCarts(dt);
     this.updateProperties();
+    this.land.update(dt);
+    this.camera.maxX = this.sim.state.land.unlocked || this.sim.state.quest >= LAND_FROM ? 128 : CITY.cameraBounds;
+    for (const b of this.land.busy) {
+      if ((b.kind === 'smelter' || b.kind === 'mill' || b.kind === 'sawmill') && Math.random() < dt * 4) this.fx.puff(b.x + 2.5, TOP + 6, b.z - 2);
+    }
     this.traffic.update(dt, this.sim.peds);
     this.fx.fountain(this.sim.city.fountain.x, TOP + 2.9, this.sim.city.fountain.z, dt);
     this.fx.update(dt);
@@ -487,6 +499,12 @@ export class GameView {
     if (!pv || !gp) return null;
     const g = pv.grid;
     return { i: Math.floor((gp.x - g.x0) / g.cw), j: Math.floor((gp.z - g.z0) / g.ch) };
+  }
+
+  /** Land parcel under a screen position (−1 = none). */
+  pickParcel(px: number, py: number): number {
+    const gp = this.groundAt(px, py);
+    return gp ? this.land.parcelAt(gp.x, gp.z) : -1;
   }
 
   /** Property whose footprint is under a screen position. */

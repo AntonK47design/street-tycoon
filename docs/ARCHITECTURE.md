@@ -3,7 +3,7 @@
 ```
 src/
   core/       loop (fixed sim tick + interpolated render), rng (seeded), i18n, events, save format
-  sim/        pure simulation (no three.js, no DOM): city layout, pedestrians, carts, economy, quests, tutorial
+  sim/        pure simulation (no three.js, no DOM): city layout, pedestrians, carts, shops, production, economy, quests
   render/     three.js: renderer + quality tiers, city mesh builder, carts, crowd (instanced, GPU-animated), fx, camera
   ui/         DOM/CSS overlay: HUD, goal bar, cart panel, minigame, placement, settings, toasts, debug overlay
   data/       balance numbers, kitchens, upgrades, quests, pacing targets, locales (en, de)

@@ -6,6 +6,7 @@ import { UPGRADE_ORDER, type UpgradeId } from '../data/upgrades';
 import type { AutoStage } from '../data/workers';
 import type { ShopKind } from '../data/shops';
 import type { Placed } from './shop-layout';
+import type { FacilityKind, GoodId } from '../data/production';
 
 export type Quality = 0 | 1 | 2;
 
@@ -36,6 +37,8 @@ export interface WorkerState {
   cart: number;
   /** Property id of the shop the worker runs as cashier (-1 = none). */
   shop: number;
+  /** Parcel id of the facility the worker runs (-1 = none). */
+  facility: number;
   auto: AutoStage;
   /** Running training: target stage and the world time it finishes. */
   training: { stage: AutoStage; endsAt: number } | null;
@@ -62,6 +65,42 @@ export interface PropertyState {
   status: 'rented' | 'owned';
   shop: ShopState | null;
   apartments: ApartmentState[];
+}
+
+export interface FacilityState {
+  kind: FacilityKind;
+  recipe: string;
+  job: { recipe: string; endsAt: number } | null;
+  /** World time when construction finishes. */
+  builtAt: number;
+  /** Parcel merged into this facility (-1 = none). */
+  merged: number;
+  /** Ranch herd. */
+  animals: number;
+  animal?: 'chicken' | 'sheep' | 'cow';
+  /** Mine: goods dug so far (depth). */
+  dug: number;
+  made: number;
+  /** Output waiting for storage space. */
+  full?: boolean;
+  /** World time since which the facility has been idle (workers start backdated from here). */
+  idleSince?: number;
+}
+
+export interface ParcelState {
+  id: number;
+  facility: FacilityState | null;
+  /** This parcel is merged into the facility on parcel `annexOf` (-1 = not). */
+  annexOf: number;
+}
+
+export interface LandState {
+  unlocked: boolean;
+  parcels: ParcelState[];
+  storage: Partial<Record<GoodId, number>>;
+  storageLevel: number;
+  /** Trading post price pressure per good (0..max), recovers over time. */
+  saturation: Partial<Record<GoodId, number>>;
 }
 
 export interface DailyTaskState {
@@ -110,6 +149,7 @@ export interface GameState {
   worldTime: number;
   daily: DailyState;
   properties: PropertyState[];
+  land: LandState;
 }
 
 export function emptyUpgrades(): Record<UpgradeId, number> {
@@ -142,6 +182,13 @@ export function emptyStats(): Record<StatKey, number> {
     bestLayout: 0,
     owned: 0,
     tenants: 0,
+    landUnlocked: 0,
+    parcels: 0,
+    facilities: 0,
+    merges: 0,
+    produced: 0,
+    crafted: 0,
+    goodsSold: 0,
   };
 }
 
@@ -186,5 +233,6 @@ export function newGameState(seed: number = BALANCE.start.seed, firstSpot = 's_0
     worldTime: 0,
     daily: { date: '', streak: 0, lastClaim: '', tasks: [] },
     properties: [],
+    land: { unlocked: false, parcels: [], storage: {}, storageLevel: 0, saturation: {} },
   };
 }

@@ -23,11 +23,14 @@ export function duration(sec: number): string {
 
 const STAGE_KEYS: Record<AutoStage, string> = { 1: 'auto.cook', 2: 'auto.restock', 3: 'auto.price', 4: 'auto.clean', 5: 'auto.fast' };
 const CASHIER_KEYS: Record<AutoStage, string> = { 1: 'auto.cashier', 2: 'auto.shelves', 3: 'auto.price', 4: 'auto.tidy', 5: 'auto.fast' };
+const FACILITY_KEYS: Record<AutoStage, string> = { 1: 'auto.operate', 2: 'auto.yield1', 3: 'auto.yield2', 4: 'auto.yield3', 5: 'auto.fast' };
+export type StaffRole = 'farmer' | 'miner' | 'craftsman';
 
 /** Hire dialog: three candidates for one cart. */
 export class HireModal extends Modal {
   private cart = -1;
   private shop = -1;
+  private parcel = -1;
   onHired: (ci: number) => void = () => {};
 
   constructor(ctx: UiContext) {
@@ -37,6 +40,7 @@ export class HireModal extends Modal {
   openFor(ci: number): void {
     this.cart = ci;
     this.shop = -1;
+    this.parcel = -1;
     this.setTitle(t('hire.title', { n: ci + 1 }), 'people');
     this.render();
     this.show();
@@ -45,7 +49,17 @@ export class HireModal extends Modal {
   openForShop(pi: number): void {
     this.cart = -1;
     this.shop = pi;
+    this.parcel = -1;
     this.setTitle(t('hire.titleShop'), 'people');
+    this.render();
+    this.show();
+  }
+
+  openForFacility(parcel: number, role: StaffRole): void {
+    this.cart = -1;
+    this.shop = -1;
+    this.parcel = parcel;
+    this.setTitle(t(`staff.hire.${role}`), 'people');
     this.render();
     this.show();
   }
@@ -53,13 +67,13 @@ export class HireModal extends Modal {
   render(): void {
     const sim = this.ctx.sim;
     this.body.innerHTML = '';
-    this.body.append(h('div', 'modal-sub', t(this.shop >= 0 ? 'hire.subShop' : 'hire.sub')));
+    this.body.append(h('div', 'modal-sub', t(this.parcel >= 0 ? 'hire.subFacility' : this.shop >= 0 ? 'hire.subShop' : 'hire.sub')));
     sim.candidates().forEach((c, k) => {
       const card = h('div', 'cand');
       card.innerHTML = `<div class="cand-face">${icon('people')}</div><div class="cand-mid"><div class="cand-name">${c.name} ${starRow(c.stars)}</div><div class="cand-info">${t('hire.wage', { w: formatPrice(c.wage) })} · ${t('hire.quality', { q: Math.round(((WORKERS.perfectByStars[c.stars] as number) + (WORKERS.goodByStars[c.stars] as number)) * 100) })}</div></div>`;
       const btn = h('button', `btn buy${sim.state.cash < c.cost ? ' poor' : ''}`, `${icon('coin')}<span>${formatCash(c.cost)}</span>`);
       onTap(btn, () => {
-        if ((this.shop >= 0 ? sim.shops.hireCashier(k, this.shop) : sim.hire(k, this.cart)) >= 0) {
+        if ((this.parcel >= 0 ? sim.production.hireWorker(k, this.parcel) : this.shop >= 0 ? sim.shops.hireCashier(k, this.shop) : sim.hire(k, this.cart)) >= 0) {
           this.ctx.sfx.play('cart');
           haptic(20);
           this.ctx.save();
@@ -124,6 +138,7 @@ export class OfflineModal extends Modal {
     this.body.append(big, sub);
     if (r.away > RETENTION.offlineCapSec) this.body.append(h('div', 'modal-note', t('offline.capped', { h: RETENTION.offlineCapSec / 3600 })));
     if (r.trained > 0) this.body.append(h('div', 'modal-note good', `${icon('check')} ${t('offline.trained', { n: r.trained })}`));
+    if (r.produced > 0) this.body.append(h('div', 'modal-note good', `${icon('box')} ${t('offline.produced', { n: formatNumber(r.produced) })}`));
     if (r.earned <= 0) this.body.append(h('div', 'modal-note', t('offline.hireTip')));
     const row = h('div', 'modal-actions');
     const ok = h('button', 'btn primary big', t('offline.collect'));
@@ -238,7 +253,7 @@ export class StaffBox {
   readonly trainBtn: HTMLButtonElement;
   private readonly body: HTMLDivElement;
   onHire: () => void = () => {};
-  private cashier = false;
+  private keys = STAGE_KEYS;
 
   constructor(private readonly ctx: UiContext) {
     this.el = h('div', 'staff-box');
@@ -255,14 +270,14 @@ export class StaffBox {
   }
 
   /** Shows a given worker (or the hire button when none). Shop cashiers use the cashier stage names. */
-  updateFor(w: WorkerState | undefined, cashier = false): void {
+  updateFor(w: WorkerState | undefined, cashier = false, role?: StaffRole): void {
     const sim = this.ctx.sim;
-    this.cashier = cashier;
+    this.keys = role ? FACILITY_KEYS : cashier ? CASHIER_KEYS : STAGE_KEYS;
     toggle(this.hireBtn, 'hidden', !!w);
     if (!w) {
       const c0 = sim.candidates()[0];
-      setHtml(this.body, `<div class="staff-empty">${t(cashier ? 'staff.noneShop' : 'staff.none')}</div>`);
-      setHtml(this.hireBtn, `${icon('people')}<span>${t(cashier ? 'staff.hireCashier' : 'staff.hire')}</span>${c0 ? `<span class="cost">${icon('coin')}${formatCash(c0.cost)}</span>` : ''}`);
+      setHtml(this.body, `<div class="staff-empty">${t(role ? 'staff.noneFacility' : cashier ? 'staff.noneShop' : 'staff.none')}</div>`);
+      setHtml(this.hireBtn, `${icon('people')}<span>${t(role ? `staff.hire.${role}` : cashier ? 'staff.hireCashier' : 'staff.hire')}</span>${c0 ? `<span class="cost">${icon('coin')}${formatCash(c0.cost)}</span>` : ''}`);
       toggle(this.trainBtn, 'hidden', true);
       return;
     }
@@ -271,7 +286,7 @@ export class StaffBox {
     for (let s = 1 as AutoStage; s <= 5; s = (s + 1) as AutoStage) {
       const on = w.auto >= s;
       const running = w.training?.stage === s;
-      stages += `<div class="stage${on ? ' on' : ''}${running ? ' run' : ''}">${on ? icon('check') : running ? icon('sun') : icon('lock')}<span>${t((this.cashier ? CASHIER_KEYS : STAGE_KEYS)[s])}</span>${running && w.training ? `<b>${duration(w.training.endsAt - sim.state.worldTime)}</b>` : ''}</div>`;
+      stages += `<div class="stage${on ? ' on' : ''}${running ? ' run' : ''}">${on ? icon('check') : running ? icon('sun') : icon('lock')}<span>${t(this.keys[s])}</span>${running && w.training ? `<b>${duration(w.training.endsAt - sim.state.worldTime)}</b>` : ''}</div>`;
     }
     setHtml(
       this.body,
@@ -281,7 +296,7 @@ export class StaffBox {
     const info = nextStage ? trainingInfo(nextStage) : null;
     toggle(this.trainBtn, 'hidden', !info || !!w.training);
     if (info && nextStage && !w.training) {
-      setHtml(this.trainBtn, `<span>${t('staff.train', { s: t((this.cashier ? CASHIER_KEYS : STAGE_KEYS)[nextStage]), d: duration(info.sec) })}</span><span class="cost">${icon('coin')}${formatCash(info.cost)}</span>`);
+      setHtml(this.trainBtn, `<span>${t('staff.train', { s: t(this.keys[nextStage]), d: duration(info.sec) })}</span><span class="cost">${icon('coin')}${formatCash(info.cost)}</span>`);
       toggle(this.trainBtn, 'poor', sim.state.cash < info.cost);
     }
   }

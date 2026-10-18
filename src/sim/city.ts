@@ -7,7 +7,7 @@ export const E = 2;
 export const S = 4;
 export const W = 8;
 
-export type BlockKind = 'plaza' | 'buildings' | 'park';
+export type BlockKind = 'plaza' | 'buildings' | 'park' | 'land';
 
 export interface Block {
   i: number;
@@ -46,6 +46,27 @@ export interface PathNode {
   nb: number[];
   /** On the outer border of the walk area: pedestrians spawn and leave here. */
   border: boolean;
+}
+
+export interface Parcel {
+  id: number;
+  x0: number;
+  z0: number;
+  x1: number;
+  z1: number;
+  /** Ids of parcels that can be merged with this one (same block, side by side). */
+  neighbours: number[];
+}
+
+/** The Outskirts: the three blocks east of the start district. */
+export const LAND_BLOCKS: ReadonlyArray<readonly [number, number]> = [
+  [2, -1],
+  [2, 0],
+  [2, 1],
+];
+
+export function isLandBlock(i: number, j: number): boolean {
+  return LAND_BLOCKS.some(([a, b]) => a === i && b === j);
 }
 
 export interface CartSpot {
@@ -91,6 +112,8 @@ export interface CityLayout {
   spots: CartSpot[];
   crosswalks: Crosswalk[];
   doors: Door[];
+  /** Land parcels in the Outskirts (Phase 4). */
+  parcels: Parcel[];
   /** Rentable ground floors: building index + foot-traffic rating. */
   properties: Array<{ building: number; traffic: number }>;
   /** Trees and props as data so the renderer and sim agree. */
@@ -123,8 +146,11 @@ export function generateCity(seed: number): CityLayout {
   }
 
   for (const b of blocks) {
-    if (b.kind === 'buildings') genBuildings(b, rng, buildings);
-    else genGreen(b, rng, trees);
+    // land blocks still draw their random numbers (into scratch arrays) so the rest of the city is unchanged
+    const land = isLandBlock(b.i, b.j);
+    if (b.kind === 'buildings') genBuildings(b, rng, land ? [] : buildings);
+    else genGreen(b, rng, land ? [] : trees);
+    if (land) b.kind = 'land';
   }
   // street trees along sidewalks (between curb and path), skipping corners and cart spots
   for (const b of blocks) {
@@ -143,7 +169,8 @@ export function generateCity(seed: number): CityLayout {
   const spots = genSpots(blocks, nodes);
   const doors = genDoors(buildings);
   const properties = genProperties(buildings);
-  return { seed, blocks, buildings, nodes, spots, crosswalks, doors, properties, trees, fountain: { x: 0, z: 0, r: 4.2 } };
+  const parcels = genParcels(blocks);
+  return { seed, blocks, buildings, nodes, spots, crosswalks, doors, properties, parcels, trees, fountain: { x: 0, z: 0, r: 4.2 } };
 }
 
 /** Point on side s (0 N, 1 E, 2 S, 3 W) of a block, t along the side (-HALF..HALF), d = inset from block centre. */
@@ -413,6 +440,34 @@ function genProperties(buildings: Building[]): Array<{ building: number; traffic
     usedBlocks.add(key);
     out.push({ building: c.i, traffic: Math.max(0.55, Math.min(1, 1.25 - c.d / 90)) });
     if (out.length >= 6) break;
+  }
+  return out;
+}
+
+/** 2×2 parcels per land block, 14 m square with a 1 m path between them. */
+function genParcels(blocks: Block[]): Parcel[] {
+  const out: Parcel[] = [];
+  const inner = HALF - CITY.sidewalk;
+  for (const [i, j] of LAND_BLOCKS) {
+    const b = blocks.find((x) => x.i === i && x.j === j);
+    if (!b) continue;
+    const base = out.length;
+    for (let k = 0; k < 4; k++) {
+      const a = k % 2;
+      const c = Math.floor(k / 2);
+      const x0 = b.cx - inner + a * inner + (a ? 0.5 : 0);
+      const z0 = b.cz - inner + c * inner + (c ? 0.5 : 0);
+      out.push({ id: base + k, x0, z0, x1: x0 + inner - 0.5, z1: z0 + inner - 0.5, neighbours: [] });
+    }
+    // side by side: 0-1, 2-3 (east-west), 0-2, 1-3 (north-south)
+    const link = (p: number, q: number): void => {
+      (out[base + p] as Parcel).neighbours.push(base + q);
+      (out[base + q] as Parcel).neighbours.push(base + p);
+    };
+    link(0, 1);
+    link(2, 3);
+    link(0, 2);
+    link(1, 3);
   }
   return out;
 }

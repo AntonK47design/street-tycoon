@@ -19,3 +19,10 @@
 - **Floors**: the ground floor is the shop (editor). Upper floors of an owned building are apartments, managed as a list in the panel's Building tab rather than with an editor.
 - **Rent is continuous** (cash never goes below 0, no eviction) to avoid a soft-lock. Shops are tuned to clear rent with the starter layout (~+$20/min) and to roughly double with a good layout.
 - **Shop demand** = base × √(area/90) × traffic × (0.3 + 0.9 × layout rating) × price factor. Customers are pedestrians recruited from the street, like cart customers.
+- **Land is a separate district** (3 blocks east, no buildings). Those blocks still consume the city RNG, so the start district stays identical to older saves. The road plane has holes under the land blocks so dug pits can go below street level.
+- **One global storage** instead of per-facility stock. Fewer things to manage on mobile; logistics between locations is Phase 6.
+- **Trading post with saturation** instead of fixed prices: each sale lowers that good's price, which recovers over time. This prevents a single good from being farmed forever and prepares the Phase 5 market.
+- **Facility workers backdate their next job** to when the last one ended (`idleSince`). This makes online and offline production match exactly and needs no separate analytic formula.
+- **Butcher gets livestock from ranch surplus** (full pens) rather than slaughtering the herd. The herd is never lost by accident.
+- **Ranch animal is chosen on build** (rotation chicken → sheep → cow). Each animal has its own recipe so the pen stays readable.
+- **Land goals start after ~40 min** of play (pacing milestone `firstGoods`), so the first session stays about carts, workers and shops.

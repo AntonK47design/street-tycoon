@@ -74,9 +74,12 @@ export class TycoonCamera {
     this.clamp();
   }
 
+  /** Extra room to the east once the Outskirts are open. */
+  maxX: number = CITY.cameraBounds;
+
   private clamp(): void {
     const b = CITY.cameraBounds;
-    this.goal.x = Math.max(-b, Math.min(b, this.goal.x));
+    this.goal.x = Math.max(-b, Math.min(this.maxX, this.goal.x));
     this.goal.z = Math.max(-b, Math.min(b, this.goal.z));
   }
 
